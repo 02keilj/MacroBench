@@ -1,0 +1,1756 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>FluidNC Macro Bench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: three-column workbench — machine + action palette | step builder | top-down preview + G-code; stacks on narrow screens */
+:root{
+  --bg:#e8ebed; --panel:#f6f7f8; --raise:#ffffff; --ink:#1a2127; --muted:#5a656d; --line:#cbd2d7;
+  --accent:#b8650a; --accent-ink:#ffffff; --accent-soft:#f5e4cf;
+  --logic:#5546ad; --logic-soft:#ebe8f8; --pat:#a3407a; --pat-soft:#f6e3ee; --mach:#3d6b6e; --mach-soft:#e0eded;
+  --bed:#dce1e4; --grid:#c4ccd1; --rapid:#7d8b95; --feed:#c9700d; --sel:#1d68c9; --bad:#c42b2b; --bad-soft:#fbe5e5;
+  --f-display:'Chakra Petch','Bahnschrift','Segoe UI',sans-serif;
+  --f-body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#131719; --panel:#1b2023; --raise:#22282c; --ink:#e2e7ea; --muted:#94a0a8; --line:#323a3f;
+  --accent:#f0a03c; --accent-ink:#1a1206; --accent-soft:#3a2a15;
+  --logic:#a99bf2; --logic-soft:#272340; --pat:#e88fbf; --pat-soft:#3a2231; --mach:#7fb9bb; --mach-soft:#1c2f30;
+  --bed:#1f2629; --grid:#2f383d; --rapid:#7a8790; --feed:#f0a03c; --sel:#5aa2ff; --bad:#ff6b6b; --bad-soft:#3a1d1d;
+  color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#131719; --panel:#1b2023; --raise:#22282c; --ink:#e2e7ea; --muted:#94a0a8; --line:#323a3f;
+  --accent:#f0a03c; --accent-ink:#1a1206; --accent-soft:#3a2a15;
+  --logic:#a99bf2; --logic-soft:#272340; --pat:#e88fbf; --pat-soft:#3a2231; --mach:#7fb9bb; --mach-soft:#1c2f30;
+  --bed:#1f2629; --grid:#2f383d; --rapid:#7a8790; --feed:#f0a03c; --sel:#5aa2ff; --bad:#ff6b6b; --bad-soft:#3a1d1d;
+  color-scheme:dark }
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45;padding:0 16px 32px}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding-block:14px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.brand{font-family:var(--f-display);font-weight:600;font-size:20px;letter-spacing:.02em;display:flex;align-items:baseline;gap:8px}
+.brand small{font-family:var(--f-mono);font-size:11px;color:var(--muted);font-weight:400;letter-spacing:0}
+.namebox{display:flex;align-items:center;gap:6px;flex:1 1 220px;min-width:0}
+.namebox input{flex:1;min-width:0;max-width:280px;font-family:var(--f-mono)}
+.top-actions{display:flex;flex-wrap:wrap;gap:6px}
+.btn{border:1px solid var(--line);background:var(--raise);border-radius:4px;padding:5px 10px;cursor:pointer;font-size:13px;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.btn.warn{border-color:var(--bad);color:var(--bad)}
+input[type=text],input:not([type]),select{background:var(--raise);border:1px solid var(--line);border-radius:4px;padding:5px 7px;width:100%;min-width:0}
+input.bad{border-color:var(--bad);background:var(--bad-soft)}
+.grid{display:grid;grid-template-columns:260px minmax(0,1fr) minmax(0,1.05fr);gap:16px;align-items:start}
+.split{display:none}
+@media (min-width:1181px){
+  .grid{grid-template-columns:var(--c1,250px) 16px var(--c2,340px) 16px minmax(0,1fr);column-gap:0}
+  .split{display:block;align-self:stretch;cursor:col-resize;position:relative;touch-action:none}
+  .split::after{content:"";position:absolute;left:7px;top:0;bottom:0;width:2px;border-radius:2px;background:transparent}
+  .split:hover::after,.split.on::after{background:var(--line)}
+}
+@media (max-width:1180px){.grid{grid-template-columns:240px minmax(0,1fr)} .col-out{grid-column:1/-1}}
+@media (max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px;min-width:0}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+h2{font-family:var(--f-display);font-weight:600;font-size:13px;letter-spacing:.09em;text-transform:uppercase;margin:0 0 10px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;gap:8px}
+h2 .aside{font-family:var(--f-mono);letter-spacing:0;text-transform:none;font-weight:400;font-size:12px}
+.lim{display:grid;grid-template-columns:22px 1fr 1fr;gap:6px;align-items:center;font-variant-numeric:tabular-nums}
+.lim .ax{font-family:var(--f-mono);font-weight:500}
+.lim .hd{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.sub{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:12px 0 6px}
+.row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.row3 label,.fields label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted);min-width:0}
+#pal-q{margin-bottom:10px}
+.pal-group{margin-bottom:14px;border-left:3px solid var(--dot);padding-left:9px}
+.pal-head{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--dot);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+.pal-head i{width:8px;height:8px;border-radius:50%;background:var(--dot)}
+.dot-motion{--dot:var(--accent)} .dot-mach{--dot:var(--mach)} .dot-logic{--dot:var(--logic)} .dot-note{--dot:var(--muted)} .dot-note .pal-head{color:var(--muted)}
+.g-pat .chip{background:var(--pat-soft);color:var(--pat)}
+.dot-pat{--dot:var(--pat)}
+.pal{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
+.pal button{display:flex;justify-content:space-between;align-items:baseline;gap:6px;text-align:left;border:1px solid color-mix(in srgb, var(--dot) 40%, var(--line));background:var(--raise);border-radius:4px;padding:5px 7px;font-size:12.5px;cursor:pointer;min-width:0}
+.pal button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pal button i{flex:none;font-style:normal;font-family:var(--f-mono);font-size:10.5px;color:var(--muted)}
+.pal button:hover{border-color:var(--dot);background:color-mix(in srgb, var(--dot) 10%, var(--raise))}
+.col-side{gap:12px}
+@media (min-width:761px){.col-side{position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);max-height:calc(100vh - 24px);overflow:auto;overscroll-behavior:contain}}
+.mpanel{padding-block:10px}
+.mpanel>summary{display:flex;align-items:baseline;gap:8px;cursor:pointer;list-style:none}
+.mpanel>summary::-webkit-details-marker{display:none}
+.mp-title{font-family:var(--f-display);font-weight:600;font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.mp-sum{flex:1;min-width:0;font-family:var(--f-mono);font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chev{color:var(--muted);transition:transform .15s}
+.mpanel[open] .chev{transform:rotate(180deg)}
+.mpanel[open] .mp-sum{visibility:hidden}
+.mp-body{margin-top:4px}
+.menu{position:relative}
+.menu>summary{list-style:none}
+.menu>summary::-webkit-details-marker{display:none}
+.menu-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:30;background:var(--raise);border:1px solid var(--line);border-radius:6px;box-shadow:0 10px 28px rgb(0 0 0 / .18);padding:6px;display:flex;flex-direction:column;gap:2px;min-width:240px}
+.mi{text-align:left;border:0;background:transparent;padding:6px 8px;border-radius:4px;cursor:pointer;font-size:13px;white-space:nowrap}
+.mi:hover{background:var(--bg)}
+.mi.warn{color:var(--bad)}
+.mi-sep{height:1px;background:var(--line);margin:4px 2px}
+.mi-row{display:flex;gap:4px;align-items:center}
+.mi-row select{flex:1;width:auto}
+.ref{position:fixed;inset:0;z-index:50;background:rgb(0 0 0 / .4);display:flex;justify-content:center;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
+.ref-box{background:var(--panel);border:1px solid var(--line);border-radius:8px;width:min(1100px,100%);display:grid;grid-template-columns:250px minmax(0,1fr);overflow:hidden;box-shadow:0 16px 48px rgb(0 0 0 / .25)}
+.ref-nav{border-right:1px solid var(--line);overflow:auto;padding:12px;background:var(--bg)}
+.ref-nav input{margin-bottom:10px}
+#ref-sel{display:none;margin-bottom:8px}
+.ref-g{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:12px 4px 4px}
+.ref-item{display:block;width:100%;text-align:left;border:0;background:transparent;padding:5px 8px;border-radius:4px;cursor:pointer;font-size:13px}
+.ref-item:hover{background:var(--panel)}
+.ref-item.on{background:var(--ink);color:var(--bg)}
+.ref-main{overflow:auto;padding:20px 28px 32px}
+.ref-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;position:sticky;top:-20px;background:var(--panel);padding-top:4px;padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid var(--line)}
+.ref-group{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.ref-head h2{font-family:var(--f-display);font-weight:600;font-size:22px;letter-spacing:0;text-transform:none;color:var(--ink);margin:2px 0 0;display:block}
+.ref-body{max-width:70ch;font-size:14px;line-height:1.6}
+.ref-body h4{font-family:var(--f-display);font-weight:600;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:22px 0 6px}
+.ref-body p{margin:0 0 10px}
+.ref-body .lead{font-size:15px}
+.ref-body code{font-family:var(--f-mono);font-size:12.5px;background:var(--raise);border:1px solid var(--line);padding:0 4px;border-radius:3px}
+.ref-body pre{font-family:var(--f-mono);font-size:12.5px;background:var(--raise);border:1px solid var(--line);border-radius:4px;padding:8px 12px;overflow-x:auto;margin:0 0 10px;line-height:1.55}
+.ref-body dl{display:grid;grid-template-columns:minmax(110px,max-content) minmax(0,1fr);gap:6px 16px;margin:0}
+.ref-body dt{font-weight:600}
+.ref-body dd{margin:0}
+.ref-body ul{margin:0 0 10px;padding-left:20px}
+.ref-body li{margin-bottom:4px}
+.ref-link{border:0;background:none;padding:0;color:var(--sel);cursor:pointer;font:inherit;text-decoration:underline;text-underline-offset:2px}
+.ref-where{font-size:12.5px;color:var(--muted);margin-bottom:12px}
+@media (max-width:760px){.ref-box{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}.ref-nav{border-right:0;border-bottom:1px solid var(--line);padding-bottom:4px}#ref-list{display:none}#ref-sel{display:block}.ref-main{padding:16px}.ref-body dl{grid-template-columns:minmax(0,1fr)}.ref-body dd{margin-bottom:6px}}
+.tut{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:min(360px,calc(100vw - 32px));z-index:40;background:var(--raise);border:1px solid var(--ink);border-radius:8px;box-shadow:0 12px 32px rgb(0 0 0 / .22);padding:14px}
+.tut-top{display:flex;justify-content:space-between;align-items:center}
+.tut-count{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.tut-x{border:0;background:transparent;cursor:pointer;color:var(--muted);font-size:14px;width:26px;height:26px;border-radius:4px}
+.tut-x:hover{background:var(--bg);color:var(--ink)}
+.tut h3{font-family:var(--f-display);font-weight:600;font-size:17px;margin:4px 0 6px;text-wrap:balance}
+.tut-body{font-size:13.5px;line-height:1.5}
+.tut-body code{font-family:var(--f-mono);font-size:12.5px;background:var(--bg);padding:1px 4px;border-radius:3px}
+.tut-state{font-size:12.5px;margin-top:8px;color:var(--muted)}
+.tut-state.ok{color:var(--mach);font-weight:600}
+.tut-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.tut-glow{outline:2px solid var(--accent) !important;outline-offset:2px}
+@media (prefers-reduced-motion:no-preference){.tut-glow{animation:tglow 1.3s ease-in-out infinite}@keyframes tglow{50%{outline-offset:5px}}}
+.target{font-size:12px;background:var(--raise);border:1px dashed var(--line);border-radius:4px;padding:6px 8px;margin-bottom:12px}
+.target b{font-weight:600}
+/* steps */
+.steps{display:flex;flex-direction:column;gap:6px}
+.step{background:var(--raise);border:1px solid var(--line);border-radius:4px;min-width:0}
+.step.is-sel{border-color:var(--sel);box-shadow:0 0 0 1px var(--sel)}
+.step.has-err .step-head{background:var(--bad-soft)}
+.step-head{display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;min-width:0;border-radius:4px}
+.chip{flex:none;font-size:11px;font-weight:600;letter-spacing:.03em;padding:2px 6px;border-radius:3px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+.g-logic .chip{background:var(--logic-soft);color:var(--logic)}
+.g-mach .chip{background:var(--mach-soft);color:var(--mach)}
+.g-note .chip{background:var(--bg);color:var(--muted)}
+.step-code{flex:1;min-width:0;font-family:var(--f-mono);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tools{display:flex;gap:2px;flex:none}
+.tools button{border:0;background:transparent;width:26px;height:26px;border-radius:3px;cursor:pointer;color:var(--muted);font-size:13px;line-height:1}
+.tools button:hover{background:var(--bg);color:var(--ink)}
+.tools button:disabled{opacity:.25;cursor:default;background:transparent}
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;padding:4px 10px 10px}
+.fields .wide{grid-column:1/-1}
+.fields .err{color:var(--bad);font-size:11px}
+.fields .hint{grid-column:1/-1;font-size:12px;color:var(--muted)}
+.branch{margin:0 8px 8px 14px;padding:6px 0 6px 12px;border-left:2px solid var(--logic-soft);display:flex;flex-direction:column;gap:6px}
+.branch-lbl{font-family:var(--f-mono);font-size:12px;color:var(--logic);margin:0 8px 0 14px}
+.add-here{align-self:flex-start;border:1px dashed var(--line);background:transparent;border-radius:3px;font-size:12px;padding:3px 8px;cursor:pointer;color:var(--muted)}
+.add-here.on{border-color:var(--sel);color:var(--sel);border-style:solid}
+.foot{font-family:var(--f-mono);font-size:12.5px;color:var(--logic);padding:0 8px 6px}
+.empty{color:var(--muted);font-size:13px;padding:18px;text-align:center;border:1px dashed var(--line);border-radius:4px}
+/* preview */
+.cv-wrap{position:relative;width:100%;background:var(--bg);border-radius:4px;overflow:hidden}
+canvas{display:block;width:100%}
+.readout{position:absolute;right:8px;top:6px;font-family:var(--f-mono);font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums;pointer-events:none}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted);margin-top:8px}
+.legend span{display:flex;align-items:center;gap:6px}
+.sw{width:18px;height:0;border-top:2px solid}
+.stats{display:flex;flex-wrap:wrap;gap:4px 18px;margin-top:10px;font-family:var(--f-mono);font-size:12px;font-variant-numeric:tabular-nums}
+.stats b{font-weight:500;color:var(--muted);font-family:var(--f-body);font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin-right:4px}
+.warns{list-style:none;padding:0;margin:10px 0 0;display:flex;flex-direction:column;gap:4px}
+.warns li{font-size:12.5px;color:var(--bad);background:var(--bad-soft);border-radius:3px;padding:4px 8px;cursor:pointer}
+.warns li.okmsg{color:var(--muted);background:transparent;cursor:default;padding-left:0}
+/* output */
+.out-opts{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;margin-bottom:8px}
+.out-opts label{display:flex;gap:5px;align-items:center;cursor:pointer}
+pre.code{margin:0;background:var(--raise);border:1px solid var(--line);border-radius:4px;padding:10px 0;font-family:var(--f-mono);font-size:12.5px;line-height:1.55;overflow:auto;max-height:420px;counter-reset:ln}
+pre.code .l{display:block;padding:0 12px 0 0;white-space:pre}
+pre.code .l::before{counter-increment:ln;content:counter(ln);display:inline-block;width:34px;margin-right:12px;text-align:right;color:var(--muted);opacity:.6;font-variant-numeric:tabular-nums}
+.k-c{color:var(--muted);font-style:italic}.k-o{color:var(--logic);font-weight:500}.k-v{color:var(--sel)}.k-g{color:var(--accent);font-weight:500}.k-s{color:var(--mach);font-weight:500}
+.viewbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-bottom:10px;font-size:12.5px}
+.viewbar label{display:flex;align-items:center;gap:6px}
+.viewbar select{width:auto}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg button{border:0;background:var(--raise);padding:4px 12px;cursor:pointer;font-size:12.5px}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--ink);color:var(--bg)}
+#cv.is3d{cursor:grab;touch-action:none}
+#cv.is3d:active{cursor:grabbing}
+.imp{margin-bottom:16px}
+.imp textarea{width:100%;font-family:var(--f-mono);font-size:12.5px;background:var(--raise);border:1px solid var(--line);border-radius:4px;padding:8px;resize:vertical}
+.imp-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.player{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px}
+.player input[type=range]{flex:1 1 140px;min-width:0}
+.player select{width:auto}
+.pinfo{margin-top:6px;font-family:var(--f-mono);font-size:12px;line-height:1.6;font-variant-numeric:tabular-nums;background:var(--raise);border:1px solid var(--line);border-radius:4px;padding:6px 8px;word-break:break-word}
+.pinfo b{font-family:var(--f-body);font-weight:600}
+.pinfo .pv{color:var(--muted)}
+.step.is-play > .step-head{background:var(--accent-soft)}
+.btn:disabled{opacity:.45;cursor:default}
+.mhint{font-size:12px;color:var(--muted);margin:6px 0 0}
+.note{font-size:12px;color:var(--muted);margin:10px 0 0;max-width:62ch}
+.note code{font-family:var(--f-mono);font-size:11.5px}
+.vars{font-family:var(--f-mono);font-size:12px;color:var(--muted);margin-top:8px;word-break:break-word}
+@media (prefers-reduced-motion:no-preference){.step,.btn{transition:border-color .12s}}
+</style>
+
+<header class="top">
+  <div class="brand">Macro Bench <small>for FluidNC</small></div>
+  <div class="namebox"><label for="mname" class="sub" style="margin:0">File</label><input id="mname" type="text" spellcheck="false"></div>
+  <div class="top-actions">
+    <button class="btn" id="b-undo" title="Undo (Ctrl+Z)" disabled>Undo</button>
+    <button class="btn" id="b-redo" title="Redo (Ctrl+Shift+Z)" disabled>Redo</button>
+    <button class="btn" id="b-hideg">Hide G-code</button>
+    <button class="btn" id="b-tut">Tutorial</button>
+    <button class="btn" id="b-ref">Reference</button>
+    <div class="seg" id="theme-seg" role="group" aria-label="Colour theme"><button data-th="auto" title="Follow your system or Claude's theme">Auto</button><button data-th="light">Light</button><button data-th="dark">Dark</button></div>
+    <details class="menu" id="filemenu">
+      <summary class="btn">File ▾</summary>
+      <div class="menu-pop">
+        <button class="mi" id="b-new">New macro</button>
+        <button class="mi" id="b-gimport" data-close>Import G-code…</button>
+        <div class="mi-sep"></div>
+        <div class="mi-row"><select id="ex-pick" aria-label="Example"><option value="marks">Mark 4 spots</option><option value="single">Surface from here</option></select><button class="mi" id="b-example">Load example</button></div>
+        <div class="mi-sep"></div>
+        <button class="mi" id="b-import" data-close>Open project file…</button>
+        <button class="mi" id="b-export">Copy project JSON</button>
+        <button class="mi" id="b-dlproj" hidden>Download project</button>
+        <input type="file" id="f-import" accept=".json,application/json" hidden>
+      </div>
+    </details>
+  </div>
+</header>
+
+<section class="panel imp" id="imp" hidden>
+  <h2>Import G-code <span class="aside" id="imp-status"></span></h2>
+  <textarea id="imp-text" rows="8" spellcheck="false" placeholder="Paste G-code here, or open a file"></textarea>
+  <div class="imp-actions">
+    <button class="btn" id="imp-file-btn">Open file…</button><input type="file" id="imp-file" accept=".nc,.gcode,.gc,.ngc,.tap,.cnc,.txt" hidden>
+    <span style="flex:1"></span>
+    <button class="btn" id="imp-close">Close</button>
+    <button class="btn" id="imp-append">Add to end</button>
+    <button class="btn primary" id="imp-replace">Replace macro</button>
+  </div>
+  <p class="mhint">Moves, arcs, probing, spindle, coolant, work offsets, variables and o-code if, while, do and repeat blocks become editable steps. Anything else is kept as Raw G-code so nothing is lost. Undo reverses an import.</p>
+</section>
+
+<main class="grid">
+  <div class="col col-side">
+    <details class="panel mpanel" id="mpanel">
+      <summary><span class="mp-title">Machine</span><span class="mp-sum" id="m-sum"></span><span class="chev" aria-hidden="true">▾</span></summary>
+      <div class="mp-body">
+        <div class="sub">Travel limits</div>
+        <div class="lim">
+          <span></span><span class="hd">Min (mm)</span><span class="hd">Max (mm)</span>
+          <span class="ax">X</span><input id="m-xmin" data-m="xmin" aria-label="X min"><input id="m-xmax" data-m="xmax" aria-label="X max">
+          <span class="ax">Y</span><input id="m-ymin" data-m="ymin" aria-label="Y min"><input id="m-ymax" data-m="ymax" aria-label="Y max">
+          <span class="ax">Z</span><input id="m-zmin" data-m="zmin" aria-label="Z min"><input id="m-zmax" data-m="zmax" aria-label="Z max">
+        </div>
+        <div class="sub">Home position, after $H</div>
+        <div class="row3"><label>X<input id="m-hx" data-m="hx"></label><label>Y<input id="m-hy" data-m="hy"></label><label>Z<input id="m-hz" data-m="hz"></label></div>
+        <div class="row3" style="margin-top:6px"><label>Safe Z (machine)<input id="m-safez" data-m="safez"></label></div>
+        <div class="sub">Starting point</div>
+        <select id="m-ref" data-m="ref" aria-label="Macro runs from">
+          <option value="machine">Homed machine (fixed positions)</option>
+          <option value="start">Wherever you jog to (relative)</option>
+        </select>
+        <p class="mhint" id="ref-hint"></p>
+        <div id="startbox"><div class="row3" style="margin-top:6px"><label>Start X<input id="m-sx" data-m="sx"></label><label>Start Y<input id="m-sy" data-m="sy"></label><label>Start Z<input id="m-sz" data-m="sz"></label></div></div>
+        <div class="sub">Rates and tool</div>
+        <div class="row3"><label>Rapid mm/min<input id="m-rapid" data-m="rapid"></label><label>Tool dia. mm<input id="m-tool" data-m="tool"></label></div>
+      </div>
+    </details>
+    <section class="panel addpanel">
+      <h2>Add a step</h2>
+      <input type="search" id="pal-q" placeholder="Find a step, e.g. arc or probe" aria-label="Find a step" autocomplete="off">
+      <div class="target" id="target"></div>
+      <div id="palette"></div>
+    </section>
+  </div>
+
+  <div class="split" data-split="1" title="Drag to resize, double-click to reset" aria-hidden="true"></div>
+  <section class="panel col-steps">
+    <h2>Steps <span class="aside" id="stepcount"></span></h2>
+    <div class="steps" id="steps"></div>
+  </section>
+
+  <div class="split" data-split="2" title="Drag to resize, double-click to reset" aria-hidden="true"></div>
+  <div class="col col-out">
+    <section class="panel">
+      <h2>Preview <span class="aside">machine coordinates</span></h2>
+      <div class="viewbar">
+        <div class="seg" role="group" aria-label="View"><button id="v-top" class="on">Top</button><button id="v-3d">3D</button></div>
+        <label>Frame <select id="v-frame"><option value="machine">Whole machine</option><option value="path">Toolpath</option></select></label>
+        <label id="v-zs-wrap" hidden>Z ×<input type="range" id="v-zs" min="1" max="10" step="1" value="1"><span id="v-zs-val">1</span></label>
+        <div class="seg" id="v-tool" role="group" aria-label="Drag to" hidden><button data-tool="orbit" class="on">Orbit</button><button data-tool="pan">Pan</button></div>
+        <div class="seg" id="v-presets" role="group" aria-label="Preset views" hidden><button data-pv="iso">Iso</button><button data-pv="top">Top</button><button data-pv="front">Front</button><button data-pv="right">Right</button></div>
+        <button class="btn" id="v-reset" hidden>Fit</button>
+        <label id="v-width-wrap"><input type="checkbox" id="v-width" checked> Cut width</label>
+      </div>
+      <div class="cv-wrap"><canvas id="cv"></canvas><div class="readout" id="readout"></div></div>
+      <div class="player">
+        <button class="btn" id="p-play">Play</button>
+        <button class="btn" id="p-prev" title="Previous move" aria-label="Previous move">◀</button>
+        <button class="btn" id="p-next" title="Next move" aria-label="Next move">▶</button>
+        <input type="range" id="p-pos" min="0" max="1000" value="0" aria-label="Playback position">
+        <select id="p-speed" aria-label="Playback speed"><option value="1">1×</option><option value="5" selected>5×</option><option value="20">20×</option><option value="100">100×</option></select>
+        <button class="btn" id="p-clear" hidden>Clear</button>
+      </div>
+      <div class="pinfo" id="p-info" hidden></div>
+      <p class="mhint" id="v-hint" hidden>Drag to orbit. Right-drag, middle-drag or shift-drag to pan. Scroll zooms toward the cursor. Double-click fits the view. Faint lines show the path's shadow on the floor.</p>
+      <div class="legend">
+        <span><i class="sw" style="border-color:var(--feed)"></i>Cutting move</span>
+        <span><i class="sw" style="border-top-style:dashed;border-color:var(--rapid)"></i>Rapid</span>
+        <span><i class="sw" style="border-color:var(--sel);border-top-width:3px"></i>Selected step</span>
+        <span><i class="sw" style="border-color:var(--bad);border-top-width:4px;width:6px"></i>Outside limits</span>
+      </div>
+      <div class="stats" id="stats"></div>
+      <ul class="warns" id="warns"></ul>
+      <div class="vars" id="vars"></div>
+    </section>
+    <section class="panel" id="gpanel">
+      <h2>G-code <span class="aside" id="linecount"></span></h2>
+      <div class="out-opts">
+        <label><input type="checkbox" id="o-head"> Header with setup notes</label>
+        <label>Output <select id="o-mode" style="width:auto"><option value="full">Full (variables and logic)</option><option value="plain">Plain G-code (unrolled)</option></select></label>
+        <label><input type="checkbox" id="o-indent"> Indent nested blocks</label>
+        <span style="flex:1"></span>
+        <button class="btn" id="b-copy">Copy G-code</button>
+        <button class="btn primary" id="b-dl" hidden>Download</button>
+      </div>
+      <p class="mhint" id="compat" style="margin:0 0 8px"></p>
+      <pre class="code" id="out"></pre>
+      <p class="note" id="dl-note" hidden>Downloads save as a <code>.txt</code> file because the viewer only allows certain file types. FluidNC reads the contents the same either way. Rename it to <code>.nc</code> if your sender or WebUI filters by extension.</p>
+      <p class="note">Save this as a <code>.nc</code> file on the controller's SD card or local filesystem and run it with <code>$SD/Run=/name.nc</code> or <code>$LocalFS/Run=/name.nc</code>, or point a <code>macro0</code>–<code>macro3</code> entry in your config at it. Variables and o-code logic need a FluidNC release with expression support, so check your firmware version before relying on them.</p>
+    </section>
+  </div>
+</main>
+
+<div class="ref" id="ref" hidden role="dialog" aria-modal="true" aria-labelledby="ref-title">
+  <div class="ref-box">
+    <nav class="ref-nav" aria-label="Reference topics">
+      <input type="search" id="ref-q" placeholder="Search the reference" aria-label="Search the reference" autocomplete="off">
+      <select id="ref-sel" aria-label="Topic"></select>
+      <div id="ref-list"></div>
+    </nav>
+    <article class="ref-main" id="ref-main">
+      <div class="ref-head"><div><div class="ref-group" id="ref-group"></div><h2 id="ref-title"></h2></div><button class="tut-x" id="ref-close" aria-label="Close reference" title="Close (Esc)">✕</button></div>
+      <div class="ref-body" id="ref-body"></div>
+    </article>
+  </div>
+</div>
+
+<aside class="tut" id="tut" hidden aria-live="polite">
+  <div class="tut-top"><span class="tut-count" id="tut-count"></span><button class="tut-x" id="tut-exit" aria-label="Exit tutorial" title="Exit tutorial">✕</button></div>
+  <h3 id="tut-title"></h3>
+  <div class="tut-body" id="tut-body"></div>
+  <div class="tut-state" id="tut-state"></div>
+  <div class="tut-actions" id="tut-actions"><button class="btn" id="tut-back">Back</button><button class="btn" id="tut-auto">Do it for me</button><span style="flex:1"></span><button class="btn primary" id="tut-next">Next</button></div>
+  <div class="tut-actions" id="tut-leave" hidden><button class="btn" id="tut-restore">Restore my previous macro</button><button class="btn primary" id="tut-keep">Keep this macro</button></div>
+</aside>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const uid = () => Math.random().toString(36).slice(2, 10);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const STORE = 'fluidnc-macro-bench-v1';
+
+/* ---------- expressions ---------- */
+const isNum = s => /^[-+]?(\d+\.?\d*|\.\d+)$/.test(s);
+function oneGroup(s){ if (s[0] !== '[' || s[s.length-1] !== ']') return false; let d = 0;
+  for (let i = 0; i < s.length; i++){ if (s[i]==='[') d++; else if (s[i]===']'){ d--; if (d===0 && i < s.length-1) return false; } } return d===0; }
+const word = e => { const t = String(e ?? '').trim(); if (!t) return '';
+  if (isNum(t) || oneGroup(t)) return t; return '[' + t + ']'; };
+const grp = e => { const t = String(e ?? '').trim() || '0'; return oneGroup(t) ? t : '[' + t + ']'; };
+const DEG = Math.PI / 180;
+const F = { ABS:Math.abs, SIN:x=>Math.sin(x*DEG), COS:x=>Math.cos(x*DEG), TAN:x=>Math.tan(x*DEG),
+  ASIN:x=>Math.asin(x)/DEG, ACOS:x=>Math.acos(x)/DEG, ATAN:x=>Math.atan(x)/DEG, ATAN2:(y,x)=>Math.atan2(y,x)/DEG,
+  EXP:Math.exp, LN:Math.log, SQRT:Math.sqrt, ROUND:Math.round, FIX:Math.floor, FUP:Math.ceil };
+const cache = new Map();
+function compile(src){
+  src = String(src ?? '').trim();
+  if (cache.has(src)) return cache.get(src);
+  const names = [];
+  let s = src.replace(/#\s*<\s*([^>]*?)\s*>/g, (m, n) => { names.push(n.toLowerCase()); return ' V(' + (names.length-1) + ') '; })
+             .replace(/#\s*(\d+)/g, (m, n) => { names.push('#' + n); return ' V(' + (names.length-1) + ') '; });
+  s = s.replace(/\[/g, '(').replace(/\]/g, ')');
+  s = s.replace(/\bATAN\s*\(([^()]*)\)\s*\/\s*\(([^()]*)\)/gi, '@ATAN2(($1),($2))');
+  const ops = {EQ:'==',NE:'!=',GT:'>',GE:'>=',LT:'<',LE:'<=',AND:'&&',OR:'||',XOR:'^',MOD:'%'};
+  s = s.replace(/\b(EQ|NE|GT|GE|LT|LE|AND|OR|XOR|MOD)\b/gi, m => ' ' + ops[m.toUpperCase()] + ' ');
+  s = s.replace(/\b(ABS|ACOS|ASIN|ATAN|COS|EXP|FIX|FUP|ROUND|LN|SIN|SQRT|TAN)\b/gi, m => '@' + m.toUpperCase());
+  s = s.replace(/@/g, 'F.');
+  const left = s.replace(/F\.[A-Z0-9]+/g, '').replace(/V\(\d+\)/g, '');
+  let res;
+  if (/[A-Za-z_]/.test(left)) res = { err: 'Unknown word. Write variables as #<name>' };
+  else if (/[#"'`;{}$\\=]/.test(left.replace(/==|!=|<=|>=/g, ''))) res = { err: 'Unexpected symbol' };
+  else {
+    try { const fn = new Function('V', 'F', 'return (' + (s.trim() || 'NaN') + ');');
+      res = { names, run(vars){ const v = fn(i => { const k = names[i]; if (!(k in vars)) throw new Error('#<' + k + '> has no value yet'); return vars[k]; }, F);
+        return typeof v === 'boolean' ? (v ? 1 : 0) : Number(v); } };
+    } catch (e) { res = { err: 'Check brackets and operators' }; }
+  }
+  cache.set(src, res); return res;
+}
+const exprErr = s => String(s ?? '').trim() === '' ? null : compile(s).err || null;
+
+/* ---------- step types ---------- */
+const AX = ['x','y','z'];
+const axWords = (b, list) => list.map(a => b[a] != null && String(b[a]).trim() !== '' ? ' ' + a.toUpperCase() + word(b[a]) : '').join('');
+const clean = t => String(t ?? '').replace(/[()]/g, '').trim();
+const CS = [['1','G54'],['2','G55'],['3','G56'],['4','G57'],['5','G58'],['6','G59']];
+const COORDS = [['work','Work coordinates'],['machine','Machine (G53)'],['rel','Relative to current (G91)']];
+const mvLines = (b, code, tail) => b.coords === 'rel' ? ['G91 ' + code + tail, 'G90'] : [(b.coords === 'machine' ? 'G53 ' : '') + code + tail];
+const T = {
+  rapid:{label:'Rapid move', code:'G0', g:'motion', def:{coords:'work',x:'',y:'',z:''},
+    fields:[{k:'coords',kind:'select',opts:COORDS,label:'Coordinates'},{k:'x',label:'X'},{k:'y',label:'Y'},{k:'z',label:'Z'}],
+    gen:b=>mvLines(b,'G0',axWords(b,AX))},
+  feed:{label:'Cutting move', code:'G1', g:'motion', def:{coords:'work',x:'',y:'',z:'',f:'1000'},
+    fields:[{k:'coords',kind:'select',opts:COORDS,label:'Coordinates'},{k:'x',label:'X'},{k:'y',label:'Y'},{k:'z',label:'Z'},{k:'f',label:'Feed mm/min'}],
+    gen:b=>mvLines(b,'G1',axWords(b,AX)+(String(b.f??'').trim()?' F'+word(b.f):''))},
+  retract:{label:'Retract', code:'G53 Z', g:'motion', def:{mode:'safe',d:'5'},
+    fields:[{k:'mode',kind:'select',opts:[['safe','To machine safe Z (G53)'],['rel','Up by a distance (G91)']],label:'How'},{k:'d',label:'Distance (relative only)'},
+      {hint:'Machine safe Z comes from the Machine panel and is the same height every run, whatever the work zero or tool length. A relative lift is measured from wherever the bit is, so check the preview for moves above your Z limit. Both leave the machine in absolute mode (G90).'}],
+    gen:b=>b.mode==='rel'?['G91 G0 Z'+word(b.d||'5'),'G90']:['G53 G0 Z'+word(P.machine.safez||'0')]},
+  arc:{label:'Arc', code:'G2/G3', g:'motion', def:{dir:'G2',x:'',y:'',i:'',j:'',f:''},
+    fields:[{k:'dir',kind:'select',opts:[['G2','Clockwise (G2)'],['G3','Counter-clockwise (G3)']],label:'Direction'},{k:'x',label:'End X'},{k:'y',label:'End Y'},{k:'i',label:'Centre I (offset)'},{k:'j',label:'Centre J (offset)'},{k:'f',label:'Feed mm/min'}],
+    gen:b=>[b.dir+axWords(b,['x','y','i','j'])+(String(b.f??'').trim()?' F'+word(b.f):'')]},
+  probe:{label:'Probe', code:'G38.2', g:'motion', def:{axis:'z',d:'-20',f:'100'},
+    fields:[{k:'axis',kind:'select',opts:[['z','Z'],['x','X'],['y','Y']],label:'Axis'},{k:'d',label:'Target'},{k:'f',label:'Feed mm/min'},{hint:'Moves toward the target until the probe triggers. The preview shows the full travel.'}],
+    gen:b=>['G38.2 '+b.axis.toUpperCase()+word(b.d||'0')+' F'+word(b.f||'100')]},
+  home:{label:'Home', code:'$H', g:'motion', def:{axes:''},
+    fields:[{k:'axes',kind:'select',opts:[['','All axes'],['X','X only'],['Y','Y only'],['Z','Z only']],label:'Axes'}],
+    gen:b=>['$H'+b.axes]},
+  workzero:{label:'Set work zero', code:'G10', g:'motion', def:{mode:'here',cs:'1',x:'0',y:'0',z:''},
+    fields:[{k:'mode',kind:'select',opts:[['machine','Origin at a machine position (G10 L2)'],['here','Current position becomes… (G10 L20)']],label:'How',wide:true},
+      {k:'cs',kind:'select',opts:CS,label:'Coordinate system'},{k:'x',label:'X'},{k:'y',label:'Y'},{k:'z',label:'Z'},
+      {hint:'G10 L2: work zero sits at these machine coordinates, so it repeats exactly after homing. G10 L20: wherever the spindle is now becomes these work values. Leave an axis blank to keep it.'}],
+    gen:b=>['G10 '+((b.mode||'here')==='machine'?'L2':'L20')+' P'+(b.cs||'1')+axWords(b,AX)]},
+  wcs:{label:'Use coordinate system', code:'G54–G59', g:'motion', def:{cs:'1'},
+    fields:[{k:'cs',kind:'select',opts:CS,label:'System'},{hint:'Following work-coordinate moves use this system\'s zero. Handy for fixed fixture positions saved on the controller.'}],
+    gen:b=>['G'+(53+ +(b.cs||1))]},
+  spindle:{label:'Spindle', code:'M3/M5', g:'mach', def:{state:'M3',s:'12000'},
+    fields:[{k:'state',kind:'select',opts:[['M3','On, clockwise (M3)'],['M4','On, counter-clockwise (M4)'],['M5','Off (M5)']],label:'State'},{k:'s',label:'Speed RPM'}],
+    gen:b=>[b.state==='M5'?'M5':b.state+' S'+word(b.s||'0')]},
+  coolant:{label:'Coolant', code:'M7/M8', g:'mach', def:{mode:'M8'},
+    fields:[{k:'mode',kind:'select',opts:[['M7','Mist (M7)'],['M8','Flood (M8)'],['M9','Off (M9)']],label:'Mode'}], gen:b=>[b.mode]},
+  output:{label:'Digital output', code:'M64/M65', g:'mach', def:{pin:'0',state:'M64'},
+    fields:[{k:'state',kind:'select',opts:[['M64','On now (M64)'],['M65','Off now (M65)'],['M62','On with next move (M62)'],['M63','Off with next move (M63)']],label:'Action'},{k:'pin',label:'Output P'}],
+    gen:b=>[b.state+' P'+word(b.pin||'0')]},
+  dwell:{label:'Wait', code:'G4', g:'mach', def:{p:'2'}, fields:[{k:'p',label:'Seconds'}], gen:b=>['G4 P'+word(b.p||'0')]},
+  pause:{label:'Pause for operator', code:'M0', g:'mach', def:{}, fields:[{hint:'Stops until cycle start is pressed.'}], gen:()=>['M0']},
+  units:{label:'Units', code:'G21/G20', g:'mach', def:{mode:'G21'}, fields:[{k:'mode',kind:'select',opts:[['G21','Millimetres (G21)'],['G20','Inches (G20)']],label:'Units'}], gen:b=>[b.mode]},
+  distance:{label:'Distance mode', code:'G90/G91', g:'mach', def:{mode:'G90'}, fields:[{k:'mode',kind:'select',opts:[['G90','Absolute (G90)'],['G91','Relative (G91)']],label:'Mode'}], gen:b=>[b.mode]},
+  set:{label:'Set variable', code:'#<>=', g:'logic', def:{name:'_count',value:'0'},
+    fields:[{k:'name',label:'Name',kind:'text'},{k:'value',label:'Value or expression'},{hint:'Names starting with _ are global. Use them elsewhere as #<name>, e.g. #<_count> + 1.'}],
+    gen:b=>['#<'+vname(b.name)+'> = '+word(b.value||'0')]},
+  need:{label:'Required input', code:'EXISTS', g:'logic', def:{name:'_depth',preview:'-3',msg:'Set #<_depth> in the console first, e.g. #<_depth> = -3',clear:'yes',sentinel:'-9999'},
+    fields:[{k:'name',label:'Variable name',kind:'text'},{k:'preview',label:'Preview value'},{k:'sentinel',label:'Cleared value'},
+      {k:'clear',kind:'select',opts:[['yes','Clear it when the macro finishes'],['no','Keep it for the next run']],label:'At the end'},
+      {k:'msg',label:'Message if it is not set',kind:'text',wide:true},
+      {hint:'Stops the macro (M2) with your message if the variable was never set, or still holds the cleared value. Set it in the console before running. The preview value is only used for the top-down view.'}]},
+  if:{label:'If', code:'o if', g:'logic', container:true, def:{cond:'#<_count> LT 3'},
+    fields:[{k:'cond',label:'Condition',wide:true},{hint:'Compare with EQ NE GT GE LT LE, combine with AND OR. Steps under Else run when the condition is false.'}]},
+  while:{label:'While', code:'o while', g:'logic', container:true, def:{cond:'#<_count> LT 3'},
+    fields:[{k:'cond',label:'Keep looping while',wide:true}]},
+  repeat:{label:'Repeat', code:'o repeat', g:'logic', container:true, def:{count:'3'}, fields:[{k:'count',label:'Times'}]},
+  brk:{label:'Break loop', code:'o break', g:'logic', def:{}, fields:[{hint:'Leaves the nearest While or Repeat.'}]},
+  cont:{label:'Next iteration', code:'o continue', g:'logic', def:{}, fields:[{hint:'Skips to the next pass of the nearest loop.'}]},
+  comment:{label:'Comment', code:'( )', g:'note', def:{text:'Describe this section'}, fields:[{k:'text',label:'Text',kind:'text',wide:true}], gen:b=>['('+clean(b.text)+')']},
+  msg:{label:'Show message', code:'MSG', g:'note', def:{text:'Done'}, fields:[{k:'text',label:'Message',kind:'text',wide:true}], gen:b=>['(MSG, '+clean(b.text)+')']},
+  raw:{label:'Raw G-code', code:'…', g:'note', def:{text:'G0 X0'}, fields:[{k:'text',label:'Line(s), passed through as written',kind:'area',wide:true},{hint:'Not simulated in the preview.'}], gen:b=>String(b.text||'').split('\n').map(s=>s.trim()).filter(Boolean)},
+};
+const PCOMMON = [{k:'z',label:'Cut depth Z (work)'},{k:'stepdown',label:'Step down per pass'},{k:'top',label:'Top Z (work)'},{k:'safe',label:'Safe Z (work)'},{k:'f',label:'Feed mm/min'}];
+const DIRS = [['G3','Counter-clockwise'],['G2','Clockwise']];
+const LINKS = [['cut','Cut straight across'],['lift','Lift to safe Z']];
+Object.assign(T, {
+  fset:{label:'Feed rate', code:'F', g:'motion', def:{f:'800'}, fields:[{k:'f',label:'Feed mm/min'}], gen:b=>['F'+word(b.f||'0')]},
+  spiral:{label:'Spiral', code:'pattern', g:'pat', pattern:true, def:{mode:'out',dir:'G3',cx:'0',cy:'0',r:'30',step:'3',z:'-1',safe:'5',f:'800'},
+    fields:[{k:'mode',kind:'select',opts:[['out','Outward, from the centre'],['in','Inward, from the outside']],label:'Start'},{k:'dir',kind:'select',opts:DIRS,label:'Direction'},
+      {k:'cx',label:'Centre X'},{k:'cy',label:'Centre Y'},{k:'r',label:'Radius'},{k:'step',label:'Stepover'},...PCOMMON,
+      {hint:'Centre and corner fields start at where the bit is when the pattern begins. Built from half-circle arcs whose radius grows by half the stepover each time. The stepover is adjusted slightly so the spiral ends exactly on the radius, then a full circle cleans up the edge.'},{explode:true}]},
+  zigzag:{label:'Zigzag', code:'pattern', g:'pat', pattern:true, def:{axis:'x',x0:'0',y0:'0',w:'100',h:'60',step:'5',z:'-1',safe:'5',f:'1200'},
+    fields:[{k:'axis',kind:'select',opts:[['x','Passes along X'],['y','Passes along Y']],label:'Passes'},{k:'x0',label:'Corner X'},{k:'y0',label:'Corner Y'},
+      {k:'w',label:'Width (X)'},{k:'h',label:'Height (Y)'},{k:'step',label:'Stepover'},...PCOMMON,
+      {hint:'Back-and-forth passes starting at the corner, which is the lowest X and Y point. The stepover is adjusted slightly so the last pass lands on the far edge.'},{explode:true}]},
+  circles:{label:'Concentric circles', code:'pattern', g:'pat', pattern:true, def:{mode:'out',dir:'G3',link:'cut',cx:'0',cy:'0',r:'30',step:'5',z:'-1',safe:'5',f:'800'},
+    fields:[{k:'mode',kind:'select',opts:[['out','Smallest first'],['in','Largest first']],label:'Order'},{k:'dir',kind:'select',opts:DIRS,label:'Direction'},
+      {k:'link',kind:'select',opts:LINKS,label:'Between rings'},{k:'cx',label:'Centre X'},{k:'cy',label:'Centre Y'},{k:'r',label:'Outer radius'},{k:'step',label:'Spacing'},...PCOMMON,
+      {hint:'Lifting between rings needs both a cut depth and a safe Z.'},{explode:true}]},
+  rects:{label:'Concentric rectangles', code:'pattern', g:'pat', pattern:true, def:{mode:'in',dir:'G3',link:'cut',x0:'0',y0:'0',w:'100',h:'60',step:'5',z:'-1',safe:'5',f:'1000'},
+    fields:[{k:'mode',kind:'select',opts:[['in','Outside first'],['out','Centre first']],label:'Order'},{k:'dir',kind:'select',opts:DIRS,label:'Direction'},
+      {k:'link',kind:'select',opts:LINKS,label:'Between rings'},{k:'x0',label:'Corner X'},{k:'y0',label:'Corner Y'},{k:'w',label:'Width (X)'},{k:'h',label:'Height (Y)'},{k:'step',label:'Spacing'},...PCOMMON,
+      {hint:'Each ring is inset by the spacing until the rectangle closes to a line through the middle. For a square, make width and height equal.'},{explode:true}]},
+});
+
+Object.assign(T, {
+  tool:{label:'Tool change', code:'M6 T', g:'mach', def:{mode:'M6',t:'1'},
+    fields:[{k:'mode',kind:'select',opts:[['M6','Change tool (T… M6)'],['M61','Set tool number only (M61 Q)']],label:'Action'},{k:'t',label:'Tool number'},
+      {hint:'What M6 does depends on your FluidNC config: atc_manual parks, pauses and measures the new tool, or your own m6_macro runs. M6 is ignored if the tool number hasn\'t changed. M61 just records which tool is fitted. The preview doesn\'t move for a tool change.'}],
+    gen:b=>b.mode==='M61'?['M61 Q'+word(b.t||'0')]:['T'+word(b.t||'0')+' M6']},
+  tlo:{label:'Tool length offset', code:'G43.1', g:'mach', def:{mode:'set',z:'0'},
+    fields:[{k:'mode',kind:'select',opts:[['set','Apply offset (G43.1)'],['cancel','Cancel offset (G49)']],label:'Action'},{k:'z',label:'Z offset'},
+      {hint:'Shifts all work-coordinate Z positions by the offset without changing work zero. Positive for a longer tool. Often set from a probe result, e.g. #5063 - #<_ts_ref>.'}],
+    gen:b=>b.mode==='cancel'?['G49']:['G43.1 Z'+word(b.z||'0')]},
+  end:{label:'End program', code:'M2/M30', g:'mach', def:{mode:'M30'},
+    fields:[{k:'mode',kind:'select',opts:[['M30','End (M30)'],['M2','End (M2)']],label:'Action'},
+      {hint:'Stops the macro here. Nothing after it runs. Put it inside an If to stop early when a check fails.'}],
+    gen:b=>[b.mode||'M30']},
+});
+const PRE = new Set(['_x','_y','_z','_current_tool','_selected_tool','#5061','#5062','#5063']);
+T.passes = {label:'Depth passes', code:'o repeat', g:'logic', container:true, def:{name:'_pass_z',top:'0',final:'-6',step:'1.5'},
+  fields:[{k:'name',label:'Depth variable',kind:'text'},{k:'top',label:'Top Z (work)'},{k:'final',label:'Final depth Z'},{k:'step',label:'Max step down'},
+    {hint:'Runs the steps inside once per pass, at evenly spaced depths down to the final Z, never stepping down more than the maximum. Use the depth variable (e.g. #<_pass_z>) as the Z of the cutting moves inside.'}]};
+function passesV(b){
+  const id = b.id, pre = '_d' + b.id.slice(0, 4) + '_', nm = vname(b.name), V = n => '#<' + pre + n + '>';
+  return [{ id, type:'set', name: nm, value: b.top || '0' },
+    { id, type:'set', name: pre + 'n', value: 'FUP[[' + E(b.top) + ' - ' + E(b.final) + '] / ' + E(b.step) + ']' },
+    { id, type:'set', name: pre + 's', value: '[' + E(b.top) + ' - ' + E(b.final) + '] / ' + V('n') },
+    { id, type:'repeat', count: V('n'), children: [{ id, type:'set', name: nm, value: '#<' + nm + '> - ' + V('s') }, ...b.children] }];
+}
+T.patgroup = {label:'Expanded pattern', code:'', g:'pat', container:true, def:{},
+  fields:[{hint:'These are the steps the pattern generates. Edit them freely, or collapse back to the pattern block.'},{collapse:true}]};
+/* pattern expansion into ordinary steps (used by generator, preview and "expand") */
+const has = v => String(v ?? '').trim() !== '';
+const E = v => '[' + (String(v ?? '').trim() || '0') + ']';
+function expand(b){
+  const id = b.id, pre = '_p' + b.id.slice(0, 4) + '_', V = n => '#<' + pre + n + '>';
+  const set = (n, v) => ({ id, type:'set', name: pre + n, value: v });
+  const mv = (type, a) => Object.assign({ id, type, coords:'work', x:'', y:'', z:'', f:'' }, a);
+  const arc = (x, y, i, j) => ({ id, type:'arc', dir: b.dir, x, y, i, j, f:'' });
+  const iff = (cond, yes, no = []) => ({ id, type:'if', cond, children: yes, else: no });
+  const rep = (count, children) => ({ id, type:'repeat', count, children });
+  const multi = has(b.stepdown) && has(b.z);
+  const cutZ = multi ? V('pz') : b.z;
+  const lift = b.link === 'lift' && has(b.safe) && has(b.z);
+  const link = (x, y) => lift ? [mv('rapid', { z: b.safe }), mv('rapid', { x, y }), mv('feed', { z: cutZ })] : [mv('feed', { x, y })];
+  const go = (x, y) => has(b.safe) ? [mv('rapid', { z: b.safe }), mv('rapid', { x, y })] : [mv('feed', { x, y })];
+  const tail = () => has(b.safe) ? [mv('rapid', { z: b.safe })] : [];
+  const cx = V('cx'), cy = V('cy'), r = V('r'), st = V('s'), n = V('n'), k = V('k');
+  let consts = [], init = [], sx, sy, body = [];
+  if (b.type === 'spiral'){
+    const out = b.mode !== 'in';
+    consts = [set('cx', b.cx), set('cy', b.cy), set('rr', b.r), set('n', 'FUP[' + E(b.r) + ' / ' + E(b.step) + ']'), set('s', V('rr') + ' / ' + n)];
+    init = [set('r', out ? '0' : V('rr'))];
+    sx = out ? cx : cx + ' - ' + V('rr'); sy = cy;
+    body = out
+      ? [rep(n, [arc(cx + ' + ' + r + ' + ' + st, cy, r + ' + ' + st + ' / 2', '0'),
+                 arc(cx + ' - [' + r + ' + ' + st + ']', cy, '-[' + r + ' + ' + st + ']', '0'),
+                 set('r', r + ' + ' + st)]),
+         arc(cx + ' - ' + V('rr'), cy, V('rr'), '0')]
+      : [arc(cx + ' - ' + r, cy, r, '0'),
+         rep(n, [arc(cx + ' + ' + r, cy, r, '0'),
+                 arc(cx + ' - ' + r + ' + ' + st, cy, st + ' / 2 - ' + r, '0'),
+                 set('r', r + ' - ' + st)])];
+  } else if (b.type === 'zigzag'){
+    const A = b.axis === 'y' ? 'y' : 'x', Bx = A === 'x' ? 'y' : 'x';
+    const a0 = V(A + '0'), b0 = V(Bx + '0'), len = V(A === 'x' ? 'w' : 'h'), span = A === 'x' ? b.h : b.w;
+    consts = [set('x0', b.x0), set('y0', b.y0), set('w', b.w), set('h', b.h), set('n', 'FUP[' + E(span) + ' / ' + E(b.step) + ']'), set('s', V(A === 'x' ? 'h' : 'w') + ' / ' + n)];
+    init = [set('k', '0'), set('side', '0')];
+    sx = V('x0'); sy = V('y0');
+    body = [rep(n + ' + 1', [mv('feed', { [Bx]: b0 + ' + ' + k + ' * ' + st }),
+      iff(V('side') + ' EQ 0', [mv('feed', { [A]: a0 + ' + ' + len })], [mv('feed', { [A]: a0 })]),
+      set('side', '1 - ' + V('side')), set('k', k + ' + 1')])];
+  } else if (b.type === 'circles'){
+    const out = b.mode !== 'in';
+    consts = [set('cx', b.cx), set('cy', b.cy), set('n', 'FUP[' + E(b.r) + ' / ' + E(b.step) + ']'), set('s', E(b.r) + ' / ' + n)];
+    init = [set('r', out ? st : E(b.r)), set('k', '0')];
+    sx = cx + ' + ' + (out ? st : E(b.r)); sy = cy;
+    body = [rep(n, [arc(cx + ' + ' + r, cy, '-' + r, '0'), set('r', r + (out ? ' + ' : ' - ') + st), set('k', k + ' + 1'),
+      iff(k + ' LT ' + n, link(cx + ' + ' + r, cy))])];
+  } else if (b.type === 'rects'){
+    const out = b.mode === 'out', d = V('d'), x0 = V('x0'), y0 = V('y0'), w = V('w'), h = V('h');
+    const xl = x0 + ' + ' + d, xr = x0 + ' + ' + w + ' - ' + d, yb = y0 + ' + ' + d, yt = y0 + ' + ' + h + ' - ' + d;
+    const ring = b.dir === 'G2'
+      ? [mv('feed', { y: yt }), mv('feed', { x: xr }), mv('feed', { y: yb }), mv('feed', { x: xl })]
+      : [mv('feed', { x: xr }), mv('feed', { y: yt }), mv('feed', { x: xl }), mv('feed', { y: yb })];
+    consts = [set('x0', b.x0), set('y0', b.y0), set('w', b.w), set('h', b.h),
+      iff(w + ' LT ' + h, [set('half', w + ' / 2')], [set('half', h + ' / 2')]),
+      set('n', 'FUP[' + V('half') + ' / ' + E(b.step) + ']'), set('s', V('half') + ' / ' + n)];
+    init = [set('d', out ? V('half') : '0'), set('k', '0')];
+    sx = out ? x0 + ' + ' + V('half') : x0; sy = out ? y0 + ' + ' + V('half') : y0;
+    body = [rep(n + ' + 1', [...ring, set('d', d + (out ? ' - ' : ' + ') + st), set('k', k + ' + 1'),
+      iff(k + ' LT ' + n + ' + 1', link(xl, yb))])];
+  } else return [];
+  const modal = [{ id, type:'distance', mode:'G90' }, { id, type:'fset', f: b.f || '800' }];
+  if (!multi) return [...consts, ...init, ...modal, ...go(sx, sy), ...(has(b.z) ? [mv('feed', { z: b.z })] : []), ...body, ...tail()];
+  const top = has(b.top) ? b.top : '0';
+  return [...consts, set('pz', top), set('pn', 'FUP[[' + E(top) + ' - ' + E(b.z) + '] / ' + E(b.stepdown) + ']'),
+    set('ps', '[' + E(top) + ' - ' + E(b.z) + '] / ' + V('pn')), set('pk', '0'), ...modal, ...go(sx, sy),
+    rep(V('pn'), [set('pz', V('pz') + ' - ' + V('ps')), ...init, mv('feed', { z: V('pz') }), ...body,
+      set('pk', V('pk') + ' + 1'), iff(V('pk') + ' LT ' + V('pn'), go(sx, sy))]), ...tail()];
+}
+const patDesc = b => {
+  const dir = b.dir === 'G2' ? 'clockwise' : 'counter-clockwise';
+  if (b.type === 'spiral') return 'Spiral ' + (b.mode === 'in' ? 'inward' : 'outward') + ', ' + dir + ', R ' + b.r + ', step ' + b.step;
+  if (b.type === 'zigzag') return 'Zigzag ' + b.w + ' × ' + b.h + ' along ' + (b.axis || 'x').toUpperCase() + ', step ' + b.step;
+  if (b.type === 'circles') return 'Rings to R ' + b.r + ', ' + (b.mode === 'in' ? 'largest first' : 'smallest first') + ', spacing ' + b.step;
+  return 'Rectangles ' + b.w + ' × ' + b.h + ', ' + (b.mode === 'out' ? 'centre first' : 'outside first') + ', spacing ' + b.step;
+};
+const patDescFull = b => patDesc(b) + (has(b.stepdown) && has(b.z) ? ', passes of ' + b.stepdown + ' to Z ' + b.z : '');
+const GROUPS = [['Motion','motion',['rapid','feed','retract','arc','probe','home','workzero','wcs']],
+  ['Patterns','pat',['spiral','zigzag','circles','rects']],
+  ['Machine','mach',['spindle','coolant','output','dwell','pause','tool','tlo','units','distance','end']],
+  ['Variables and logic','logic',['set','need','if','while','repeat','passes','brk','cont']],
+  ['Notes','note',['comment','msg','raw']]];
+const vname = n => String(n ?? '').replace(/[#<>\s]/g, '') || '_var';
+
+function mk(type, over = {}){
+  const b = Object.assign({ id: uid(), type }, JSON.parse(JSON.stringify(T[type].def)), over);
+  if (T[type].container){ b.children = b.children || []; if (type === 'if') b.else = b.else || []; }
+  return b;
+}
+
+/* ---------- state ---------- */
+const DEFAULT_MACHINE = { tool:'6', xmin:'0', xmax:'600', ymin:'0', ymax:'400', zmin:'-80', zmax:'0', sx:'60', sy:'50', sz:'-30', hx:'3', hy:'3', hz:'-3', rapid:'3000', ref:'machine', safez:'-3' };
+const zigzag = () => mk('while',{cond:'#<_py> LE #<_height>', children:[
+      mk('feed',{y:'#<_py>',f:'1500'}),
+      mk('if',{cond:'#<_px> EQ 0', children:[mk('set',{name:'_px',value:'#<_width>'})], else:[mk('set',{name:'_px',value:'0'})]}),
+      mk('feed',{x:'#<_px>',f:''}),
+      mk('set',{name:'_py',value:'#<_py> + #<_step>'}),
+    ]});
+function exampleMarks(machine){
+  return { name:'mark_spots.nc', head:true, indent:true, machine:Object.assign({...DEFAULT_MACHINE}, machine || {}, {ref:'machine'}), blocks:[
+    mk('comment',{text:'Mark 4 spots in a row, alternating shallow and deep'}),
+    mk('units'), mk('distance'),
+    mk('home'),
+    mk('workzero',{mode:'machine',cs:'1',x:'100',y:'100',z:'-40'}),
+    mk('set',{name:'_i',value:'0'}),
+    mk('spindle',{state:'M3',s:'12000'}),
+    mk('repeat',{count:'4', children:[
+      mk('rapid',{x:'#<_i> * 40',y:'0',z:'5'}),
+      mk('if',{cond:'[#<_i> MOD 2] EQ 0', children:[mk('feed',{z:'-2',f:'300'})], else:[mk('feed',{z:'-5',f:'300'})]}),
+      mk('rapid',{z:'5'}),
+      mk('set',{name:'_i',value:'#<_i> + 1'}),
+    ]}),
+    mk('spindle',{state:'M5'}),
+    mk('retract',{mode:'safe'}),
+    mk('msg',{text:'Marking done'}),
+  ]};
+}
+function example(machine){
+  return { name:'surface_pass.nc', head:true, indent:false, machine:Object.assign({...DEFAULT_MACHINE}, machine || {}, {ref:'start'}), blocks:[
+    mk('comment',{text:'Surface a rectangle from the current position, which becomes work zero'}),
+    mk('units'), mk('distance'),
+    mk('workzero',{x:'0',y:'0',z:'0'}),
+    mk('set',{name:'_width',value:'200'}),
+    mk('set',{name:'_height',value:'120'}),
+    mk('set',{name:'_step',value:'15'}),
+    mk('set',{name:'_depth',value:'-0.5'}),
+    mk('set',{name:'_px',value:'0'}),
+    mk('set',{name:'_py',value:'0'}),
+    mk('rapid',{z:'5'}),
+    mk('spindle',{state:'M3',s:'18000'}),
+    mk('dwell',{p:'3'}),
+    mk('feed',{z:'#<_depth>',f:'300'}),
+    zigzag(),
+    mk('rapid',{z:'5'}),
+    mk('spindle',{state:'M5'}),
+    mk('rapid',{x:'0',y:'0',z:''}),
+    mk('msg',{text:'Surfacing complete'}),
+  ]};
+}
+let P;
+try { P = JSON.parse(localStorage.getItem(STORE)); } catch (e) { P = null; }
+if (!P || !Array.isArray(P.blocks)) P = exampleMarks();
+P.machine = Object.assign({...DEFAULT_MACHINE}, P.machine || {});
+let sel = { id: null, branch: null };
+let saveT; const save = () => { clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem(STORE, JSON.stringify(P)); } catch (e) {} }, 250); };
+
+function find(id, list = P.blocks, parent = null){
+  for (let i = 0; i < list.length; i++){
+    const b = list[i]; if (b.id === id) return { list, index: i, block: b, parent };
+    for (const br of ['children','else']) if (b[br]){ const r = find(id, b[br], b); if (r) return r; }
+  }
+  return null;
+}
+
+/* ---------- generator ---------- */
+const fmtTime = mins => mins < 1 ? Math.round(mins * 60) + ' s' : Math.floor(mins) + ' min ' + Math.round((mins % 1) * 60) + ' s';
+function allBlocks(list = P.blocks, out = []){ for (const b of list){ out.push(b); if (b.children) allBlocks(b.children, out); if (b.else) allBlocks(b.else, out); } return out; }
+function setupNotes(s){
+  const all = allBlocks(), n = [], f1 = v => (Math.round(v * 10) / 10).toString();
+  n.push(all.some(b => b.type === 'home') ? 'Start: homes the machine itself' : (P.machine.ref || 'machine') === 'machine' ? 'Start: home the machine before running' : 'Start: jog to the start position before running');
+  const u = all.find(b => b.type === 'units'); n.push('Units: ' + (u ? (u.mode === 'G20' ? 'inches' : 'mm') : 'controller default, no G20 or G21 in this file'));
+  const wz = all.filter(b => b.type === 'workzero');
+  n.push(wz.length ? 'Work zero: set by this macro' + (wz.some(b => b.mode === 'machine') ? ' at fixed machine positions' : ' from the current position') : 'Work zero: uses the current G54 zero, set it before running');
+  const needs = all.filter(b => b.type === 'need'); if (needs.length) n.push('Set before running: ' + needs.map(b => '#<' + vname(b.name) + '>').join(', '));
+  const sp = all.find(b => b.type === 'spindle' && b.state !== 'M5'); if (sp) n.push('Spindle: turns on' + (has(sp.s) ? ' at S' + sp.s : ''));
+  if (has(P.machine.tool)) n.push('Tool: ' + P.machine.tool + ' mm diameter');
+  if (s.segs.length){ const bx = { x0: 1e9, x1: -1e9, y0: 1e9, y1: -1e9, z0: 1e9, z1: -1e9 };
+    for (const g of s.segs) for (const p of g.pts){ bx.x0 = Math.min(bx.x0, p.x); bx.x1 = Math.max(bx.x1, p.x); bx.y0 = Math.min(bx.y0, p.y); bx.y1 = Math.max(bx.y1, p.y); bx.z0 = Math.min(bx.z0, p.z); bx.z1 = Math.max(bx.z1, p.z); }
+    n.push('Travel, machine coords: X ' + f1(bx.x0) + ' to ' + f1(bx.x1) + ', Y ' + f1(bx.y0) + ' to ' + f1(bx.y1) + ', Z ' + f1(bx.z0) + ' to ' + f1(bx.z1)); }
+  n.push('Estimated time: ' + fmtTime(s.time));
+  n.push(P.plain ? 'Output: plain G-code, loops and variables worked out in advance' : 'Output: uses variables and o-code logic where the macro does');
+  return n;
+}
+const featsOf = ls => { const f = [], any = re => ls.some(l => re.test(l));
+  if (any(/^\s*o\d+\s/i)) f.push('o-code flow control'); if (any(/#</)) f.push('named variables'); if (any(/\[/)) f.push('expressions in square brackets');
+  if (any(/EXISTS/)) f.push('EXISTS'); if (any(/G10 L2\b/)) f.push('G10 L2'); if (any(/\bM6[2-5]\b/)) f.push('digital outputs M62 to M65'); return f; };
+function generate(s){
+  let on = 100; const lines = []; const sum = {}; const ind = P.indent;
+  const emit = (d, t) => lines.push((ind ? '  '.repeat(d) : '') + t);
+  const clears = [];
+  (function walk(list, d, loops){
+    for (const b of list){
+      if (b.type === 'passes'){
+        walk(passesV(b), d, loops);
+        sum[b.id] = { head: 'Passes of #<' + vname(b.name) + '> from ' + (b.top || '0') + ' to ' + b.final + ', max ' + b.step + ' per pass', foot: (sum[b.id] || {}).foot || '' };
+      } else if (b.type === 'patgroup'){
+        const start = lines.length; walk(b.children, d, loops);
+        sum[b.id] = { head: patDescFull(b.pattern) + ' · ' + (lines.length - start) + ' lines', foot: '' };
+      } else if (T[b.type].pattern){
+        const start = lines.length; walk(expand(b), d, loops);
+        sum[b.id] = { head: patDescFull(b) + ' · ' + (lines.length - start) + ' lines' };
+      } else if (b.type === 'need'){
+        const v = '#<' + vname(b.name) + '>', sv = word(b.sentinel || '-9999'), msg = '(MSG, ' + clean(b.msg) + ')';
+        const n1 = on++, n2 = on++, h = 'o' + n1 + ' if [EXISTS[' + v + '] EQ 0]';
+        emit(d, h); emit(d+1, msg); emit(d+1, 'M2'); emit(d, 'o' + n1 + ' endif');
+        emit(d, 'o' + n2 + ' if [' + v + ' EQ ' + sv + ']'); emit(d+1, msg); emit(d+1, 'M2'); emit(d, 'o' + n2 + ' endif');
+        if (b.clear !== 'no' && !clears.some(c => c.v === v)) clears.push({ v, sv });
+        sum[b.id] = { head: v + ' must be set before running' + (b.clear !== 'no' ? ', cleared to ' + sv + ' at the end' : '') };
+      } else if (b.type === 'if'){
+        const n = on++; const h = 'o' + n + ' if ' + grp(b.cond); emit(d, h); walk(b.children, d+1, loops);
+        if (b.else.length){ emit(d, 'o' + n + ' else'); walk(b.else, d+1, loops); }
+        const f = 'o' + n + ' endif'; emit(d, f); sum[b.id] = { head:h, foot:f, mid:'o' + n + ' else' };
+      } else if (b.type === 'while' || b.type === 'repeat'){
+        const n = on++; const h = b.type === 'while' ? 'o' + n + ' while ' + grp(b.cond) : 'o' + n + ' repeat ' + grp(b.count);
+        emit(d, h); walk(b.children, d+1, [...loops, n]);
+        const f = 'o' + n + (b.type === 'while' ? ' endwhile' : ' endrepeat'); emit(d, f); sum[b.id] = { head:h, foot:f };
+      } else if (b.type === 'brk' || b.type === 'cont'){
+        const n = loops[loops.length-1]; const t = n ? 'o' + n + (b.type === 'brk' ? ' break' : ' continue') : '(' + (b.type === 'brk' ? 'break' : 'continue') + ' outside a loop)';
+        emit(d, t); sum[b.id] = { head:t };
+      } else {
+        const ls = T[b.type].gen(b); ls.forEach(l => emit(d, l)); sum[b.id] = { head: ls.join('  ') || '(empty)' };
+      }
+    }
+  })(P.blocks, 0, []);
+  if (clears.length){ emit(0, '(Clear inputs so the next run has to set them again)'); clears.forEach(c => emit(0, c.v + ' = ' + c.sv)); }
+  const body = P.plain ? (s.flat || []).slice() : lines;
+  if (P.plain && s.halted) body.push('(Stopped: the preview hit its step limit, so this file is incomplete)');
+  const header = P.head ? ['(' + clean(P.name || 'macro') + ')', '(Built with Macro Bench)', ...setupNotes(s).map(t => '(- ' + clean(t) + ')')] : [];
+  const all = [...header, ...body];
+  return { text: all.join('\n'), lines: all, sum, feats: featsOf(lines) };
+}
+
+/* ---------- simulator ---------- */
+const LEAF = new Set(['tool','tlo','end','units','distance','rapid','feed','retract','arc','probe','home','workzero','wcs','spindle','coolant','output','dwell','pause','fset','comment','msg','raw']);
+function simulate(opts = {}){
+  const probeId = opts.probe, flat = opts.flat ? [] : null;
+  const m = P.machine; const num = (v, d) => { const n = parseFloat(v); return isFinite(n) ? n : d; };
+  const fromHome = (m.ref || 'machine') === 'machine';
+  const st = { pos: fromHome ? { x:num(m.hx,0), y:num(m.hy,0), z:num(m.hz,0) } : { x:num(m.sx,0), y:num(m.sy,0), z:num(m.sz,0) },
+    offs:{1:{x:0,y:0,z:0},2:{x:0,y:0,z:0},3:{x:0,y:0,z:0},4:{x:0,y:0,z:0},5:{x:0,y:0,z:0},6:{x:0,y:0,z:0}}, cs:'1', abs:true, k:1, f:null, tlo:0,
+    get off(){ return this.offs[this.cs]; } };
+  const origins = []; const noteOrigin = o => { if (!origins.some(q => Math.abs(q.x-o.x) < 1e-6 && Math.abs(q.y-o.y) < 1e-6)) origins.push({ x:o.x, y:o.y, z:o.z }); };
+  const start = { ...st.pos };
+  const vars = { _current_tool: 0, _selected_tool: 0 }; const segs = []; const errs = []; const errIds = new Set();
+  const setPre = () => { const k = st.k; vars._x = (st.pos.x - st.off.x) / k; vars._y = (st.pos.y - st.off.y) / k; vars._z = (st.pos.z - st.off.z - st.tlo) / k; };
+  const lim = { x:[num(m.xmin,0),num(m.xmax,0)], y:[num(m.ymin,0),num(m.ymax,0)], z:[num(m.zmin,0),num(m.zmax,0)] };
+  const oobSteps = new Set(); let budget = 20000; let time = 0, feedLen = 0, rapidLen = 0; let zlo = st.pos.z, zhi = st.pos.z;
+  const rapidRate = Math.max(1, num(m.rapid, 3000));
+  const warn = (b, msg) => { if (!errIds.has(b.id + msg)){ errIds.add(b.id + msg); errs.push({ id:b.id, msg }); } };
+  const ev = (b, s, label) => { const t = String(s ?? '').trim(); if (!t) return null; const c = compile(t);
+    if (c.err){ warn(b, label + ': ' + c.err); return null; }
+    try { setPre(); const v = c.run(vars); if (!isFinite(v)){ warn(b, label + ' is not a number'); return null; } return v; } catch (e){ warn(b, label + ': ' + e.message); return null; } };
+  const check = (b, p) => { for (const a of AX){ if (p[a] < lim[a][0] - 1e-6 || p[a] > lim[a][1] + 1e-6){ if (!oobSteps.has(b.id)){ oobSteps.add(b.id); warn(b, a.toUpperCase() + ' goes to ' + fmt(p[a]) + ' mm, outside ' + lim[a][0] + ' to ' + lim[a][1]); } return false; } } return true; };
+  const target = (b, machineMode, vals) => { const p = { ...st.pos };
+    for (const a of AX){ const v = vals[a]; if (v == null) continue; const mm = v * st.k;
+      if (machineMode === 'rel') p[a] = st.pos[a] + mm; else if (machineMode) p[a] = mm; else if (st.abs) p[a] = mm + st.off[a] + (a === 'z' ? st.tlo : 0); else p[a] = st.pos[a] + mm; }
+    return p; };
+  const addSeg = (b, kind, pts, rate) => { let len = 0; for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i].x-pts[i-1].x, pts[i].y-pts[i-1].y, pts[i].z-pts[i-1].z);
+    const t0 = time;
+    if (kind === 'feed'){ feedLen += len; if (rate) time += len / rate; } else { rapidLen += len; time += len / rapidRate; }
+    const bad = pts.map(p => !check(b, p)); for (const p of pts){ zlo = Math.min(zlo, p.z); zhi = Math.max(zhi, p.z); }
+    segs.push({ id:b.id, kind, pts, bad, t0, t1: time, len, vars: Object.assign({}, vars), off: { ...st.off }, f: kind === 'feed' ? rate : null, k: st.k }); st.pos = { ...pts[pts.length-1] }; };
+  const concrete = b => { const c = { ...b }; for (const f of T[b.type].fields || []){ if (!f.k || f.kind || !has(c[f.k])) continue; const v = ev(b, c[f.k], f.label); if (v != null) c[f.k] = fmt(v); } return T[b.type].gen(c); };
+  const feedRate = (b) => { const f = ev(b, b.f, 'Feed'); if (f != null) st.f = f * st.k; if (st.f == null){ warn(b, 'No feed rate set yet. FluidNC will reject this move'); } return st.f; };
+
+  let probe = null;
+  function run(list, loopDepth){
+    for (const b of list){
+      if (probeId && !probe && b.id === probeId) probe = { x: (st.pos.x - st.off.x) / st.k, y: (st.pos.y - st.off.y) / st.k };
+      if (--budget < 0) return 'halt';
+      if (flat && LEAF.has(b.type)) flat.push(...(b.type === 'raw' || b.type === 'comment' || b.type === 'msg' ? T[b.type].gen(b) : concrete(b)));
+      switch (b.type){
+        case 'rapid': case 'feed': { const vals = {}; for (const a of AX) vals[a] = ev(b, b[a], a.toUpperCase());
+          if (AX.every(a => vals[a] == null) && b.type === 'rapid') { warn(b, 'No axis given'); break; }
+          const rate = b.type === 'feed' ? feedRate(b) : null;
+          addSeg(b, b.type, [st.pos, target(b, b.coords === 'rel' ? 'rel' : b.coords === 'machine', vals)], rate); if (b.coords === 'rel') st.abs = true; break; }
+        case 'retract': { const tgt = { ...st.pos };
+          if (b.mode === 'rel'){ const d = ev(b, b.d, 'Distance'); if (d != null) tgt.z = st.pos.z + d * st.k; st.abs = true; }
+          else tgt.z = num(P.machine.safez, 0);
+          addSeg(b, 'rapid', [st.pos, tgt]); break; }
+        case 'probe': { const rate = feedRate(b); const vals = { [b.axis]: ev(b, b.d, 'Target') }; addSeg(b, 'feed', [st.pos, target(b, false, vals)], rate);
+          setPre(); vars['#5061'] = vars._x; vars['#5062'] = vars._y; vars['#5063'] = vars._z; break; }
+        case 'tool': { const t = ev(b, b.t, 'Tool number'); if (t != null){ vars._selected_tool = t; vars._current_tool = t; } break; }
+        case 'tlo': if (b.mode === 'cancel') st.tlo = 0; else { const z = ev(b, b.z, 'Z offset'); if (z != null) st.tlo = z * st.k; } break;
+        case 'end': return 'end';
+        case 'arc': { const rate = feedRate(b); const vals = { x: ev(b, b.x, 'X'), y: ev(b, b.y, 'Y') };
+          const i = (ev(b, b.i, 'I') || 0) * st.k, j = (ev(b, b.j, 'J') || 0) * st.k;
+          const end = target(b, false, vals); const cx = st.pos.x + i, cy = st.pos.y + j; const r = Math.hypot(st.pos.x - cx, st.pos.y - cy);
+          if (r < 1e-9){ warn(b, 'Arc needs a centre offset I or J'); break; }
+          const r2 = Math.hypot(end.x - cx, end.y - cy); if (Math.abs(r - r2) > 0.05) warn(b, 'End point is not on the arc (radius ' + fmt(r) + ' vs ' + fmt(r2) + ')');
+          let a0 = Math.atan2(st.pos.y - cy, st.pos.x - cx), a1 = Math.atan2(end.y - cy, end.x - cx);
+          if (b.dir === 'G2'){ if (a1 >= a0 - 1e-9) a1 -= 2*Math.PI; } else { if (a1 <= a0 + 1e-9) a1 += 2*Math.PI; }
+          const n = Math.max(8, Math.ceil(Math.abs(a1 - a0) / (2*Math.PI) * 72)); const pts = [];
+          for (let s = 0; s <= n; s++){ const t = s / n, a = a0 + (a1 - a0) * t; pts.push({ x: cx + r*Math.cos(a), y: cy + r*Math.sin(a), z: st.pos.z + (end.z - st.pos.z) * t }); }
+          addSeg(b, 'feed', pts, rate); break; }
+        case 'home': { const tgt = { ...st.pos }; const axes = b.axes ? [b.axes.toLowerCase()] : ['z','x','y'];
+          for (const a of axes) tgt[a] = num(P.machine['h' + a], 0); addSeg(b, 'rapid', [st.pos, tgt]); break; }
+        case 'workzero': { const o = st.offs[b.cs || '1']; for (const a of AX){ const v = ev(b, b[a], a.toUpperCase()); if (v == null) continue;
+            o[a] = (b.mode || 'here') === 'machine' ? v * st.k : st.pos[a] - v * st.k - (a === 'z' ? st.tlo : 0); }
+          if ((b.cs || '1') === st.cs) noteOrigin(o); break; }
+        case 'wcs': st.cs = b.cs || '1'; noteOrigin(st.off); break;
+        case 'units': st.k = b.mode === 'G20' ? 25.4 : 1; break;
+        case 'distance': st.abs = b.mode === 'G90'; break;
+        case 'dwell': { const p = ev(b, b.p, 'Seconds'); if (p) time += p / 60; break; }
+        case 'spindle': if (b.state !== 'M5') ev(b, b.s, 'Speed'); break;
+        case 'output': ev(b, b.pin, 'Output'); break;
+        case 'patgroup': { const r = run(b.children, loopDepth); if (r) return r; break; }
+        case 'passes': { const r = run(passesV(b), loopDepth); if (r) return r; break; }
+        case 'spiral': case 'zigzag': case 'circles': case 'rects': { const r = run(expand(b), loopDepth); if (r) return r; break; }
+        case 'fset': { const f = ev(b, b.f, 'Feed'); if (f != null) st.f = f * st.k; break; }
+        case 'need': { const v = ev(b, b.preview, 'Preview value'); if (v != null) vars[vname(b.name).toLowerCase()] = v;
+          if (flat) warn(b, 'Plain output fixes this input at its preview value of ' + b.preview); break; }
+        case 'set': { if (PRE.has(vname(b.name).toLowerCase())) warn(b, '#<' + vname(b.name) + '> is a built-in value that FluidNC sets itself. Pick a different name');
+          const v = ev(b, b.value, 'Value'); if (v != null) vars[vname(b.name).toLowerCase()] = v; break; }
+        case 'if': { const c = ev(b, b.cond, 'Condition'); const r = run(c ? b.children : b.else, loopDepth); if (r) return r; break; }
+        case 'while': case 'repeat': {
+          let n = 0; const times = b.type === 'repeat' ? ev(b, b.count, 'Times') : null;
+          while (b.type === 'while' ? ev(b, b.cond, 'Condition') : n < (times || 0)){
+            n++; const r = run(b.children, loopDepth + 1);
+            if (r === 'halt') { warn(b, 'Stopped simulating after 20,000 steps. Check the loop can finish'); return 'halt'; }
+            if (r === 'end') return 'end';
+            if (r === 'break') break;
+          }
+          break; }
+        case 'brk': if (!loopDepth){ warn(b, 'Break is not inside a loop'); break; } return 'break';
+        case 'cont': if (!loopDepth){ warn(b, 'Continue is not inside a loop'); break; } return 'continue';
+      }
+    }
+    return null;
+  }
+  const r = run(P.blocks, 0);
+  if (!origins.length) noteOrigin(st.off);
+  return { flat, probe, segs, errs, vars, start, end: st.pos, origins, lim, time, feedLen, rapidLen, zlo, zhi, halted: r === 'halt' };
+}
+const fmt = v => (Math.round(v * 1000) / 1000).toString();
+
+/* ---------- rendering: palette & machine ---------- */
+function renderPalette(){
+  const q = ($('#pal-q').value || '').trim().toLowerCase();
+  $('#palette').innerHTML = GROUPS.map(([title, cls, types]) => {
+    const vis = types.filter(t => !q || (T[t].label + ' ' + T[t].code + ' ' + title).toLowerCase().includes(q));
+    if (!vis.length) return '';
+    return `<div class="pal-group dot-${cls}"><div class="pal-head"><i></i>${title}</div><div class="pal">` +
+      vis.map(t => `<button data-add="${t}" title="${esc(T[t].label)}"><span>${esc(T[t].label)}</span>${T[t].code && T[t].code !== 'pattern' ? `<i>${esc(T[t].code)}</i>` : ''}</button>`).join('') + '</div></div>';
+  }).join('') || '<p class="mhint">No step matches that search.</p>';
+  if (typeof tutRender === 'function') tutRender();
+}
+function machSummary(){ const m = P.machine, d = (a, b) => fmt(Math.abs((parseFloat(b) || 0) - (parseFloat(a) || 0)));
+  $('#m-sum').textContent = d(m.xmin, m.xmax) + ' × ' + d(m.ymin, m.ymax) + ' × ' + d(m.zmin, m.zmax) + ' mm · home ' + m.hx + ', ' + m.hy + ', ' + m.hz + ' · safe Z ' + m.safez + ' · tool ' + (m.tool || '–') + ' mm'; }
+function targetInfo(){
+  if (sel.id){ const f = find(sel.id); if (f){
+    if (sel.branch) return { list: f.block[sel.branch], index: f.block[sel.branch].length, text: `Adding inside <b>${esc(T[f.block.type].label)}${sel.branch === 'else' ? ' → Else' : ''}</b>` };
+    return { list: f.list, index: f.index + 1, text: `Adding after <b>${esc(T[f.block.type].label)}</b>` }; } }
+  return { list: P.blocks, index: P.blocks.length, text: 'Adding to the <b>end of the macro</b>' };
+}
+function syncRef(){
+  const home = (P.machine.ref || 'machine') === 'machine';
+  $('#startbox').hidden = home;
+  $('#ref-hint').textContent = home
+    ? 'The preview starts at your home position. Use machine coordinates (G53) or set work zero at a machine position (G10 L2) so the job lands in the same place every run.'
+    : 'The preview starts where you jog to. Set work zero with "current position becomes…" (G10 L20) to run the job relative to that spot.';
+}
+function renderMachine(){
+  document.querySelectorAll('[data-m]').forEach(i => { i.value = P.machine[i.dataset.m] ?? ''; }); syncRef(); machSummary();
+  $('#mname').value = P.name || ''; $('#o-head').checked = !!P.head; $('#o-indent').checked = !!P.indent; $('#o-mode').value = P.plain ? 'plain' : 'full';
+}
+
+/* ---------- rendering: steps ---------- */
+let lastSim = null, lastGen = null;
+function fieldHtml(b, f){
+  if (f.hint) return `<div class="hint">${esc(f.hint)}</div>`;
+  if (f.collapse) return `<button class="btn explode" data-act="collapse" data-id="${b.id}">Collapse back to pattern</button>`;
+  if (f.explode) return `<button class="btn explode" data-act="explode" data-id="${b.id}">Expand into editable steps</button>`;
+  const id = 'f-' + b.id + '-' + f.k; const v = b[f.k] ?? '';
+  let ctl;
+  if (f.kind === 'select') ctl = `<select id="${id}" data-id="${b.id}" data-k="${f.k}">` + f.opts.map(([val, lab]) => `<option value="${esc(val)}"${val === v ? ' selected' : ''}>${esc(lab)}</option>`).join('') + '</select>';
+  else if (f.kind === 'area') ctl = `<textarea id="${id}" data-id="${b.id}" data-k="${f.k}" rows="3" spellcheck="false" style="background:var(--raise);border:1px solid var(--line);border-radius:4px;padding:5px 7px;font-family:var(--f-mono);font-size:12.5px;width:100%">${esc(v)}</textarea>`;
+  else { const isExpr = f.kind !== 'text'; const e = isExpr ? exprErr(v) : null;
+    ctl = `<input type="text" id="${id}" data-id="${b.id}" data-k="${f.k}" data-expr="${isExpr ? 1 : ''}" value="${esc(v)}" spellcheck="false"${isExpr ? ' style="font-family:var(--f-mono)"' : ''} class="${e ? 'bad' : ''}"><span class="err" id="${id}-e">${e ? esc(e) : ''}</span>`; }
+  return `<label class="${f.wide || f.kind === 'area' ? 'wide' : ''}">${esc(f.label)}${ctl}</label>`;
+}
+function renderList(list, parent){
+  if (!list.length && !parent) return '<div class="empty">No steps yet. Pick an action on the left to add the first line of your macro.</div>';
+  return list.map((b, i) => {
+    const t = T[b.type]; const s = lastGen.sum[b.id] || { head:'' };
+    const isSel = sel.id === b.id; const hasErr = lastSim.errs.some(e => e.id === b.id);
+    const prev = list[i-1]; const canIn = prev && T[prev.type].container;
+    let h = `<div class="step g-${t.g}${isSel ? ' is-sel' : ''}${hasErr ? ' has-err' : ''}" data-id="${b.id}">
+      <div class="step-head" data-act="select" data-id="${b.id}">
+        <span class="chip">${esc(t.label)}</span><code class="step-code" data-sum="${b.id}">${esc(s.head)}</code>
+        <span class="tools">
+          <button data-act="up" data-id="${b.id}" title="Move up" aria-label="Move up"${i === 0 ? ' disabled' : ''}>↑</button>
+          <button data-act="down" data-id="${b.id}" title="Move down" aria-label="Move down"${i === list.length-1 ? ' disabled' : ''}>↓</button>
+          <button data-act="in" data-id="${b.id}" title="Move into the block above" aria-label="Move into the block above"${canIn ? '' : ' disabled'}>→</button>
+          <button data-act="out" data-id="${b.id}" title="Move out of this block" aria-label="Move out of this block"${parent ? '' : ' disabled'}>←</button>
+          <button data-act="help" data-id="${b.id}" title="What does this do?" aria-label="Help for this step">?</button>
+          <button data-act="dup" data-id="${b.id}" title="Duplicate" aria-label="Duplicate">⧉</button>
+          <button data-act="del" data-id="${b.id}" title="Delete" aria-label="Delete">✕</button>
+        </span></div>`;
+    if (isSel) h += `<div class="fields">${t.fields.map(f => fieldHtml(b, f)).join('')}</div>`;
+    if (t.container){
+      const on = br => sel.id === b.id && sel.branch === br ? ' on' : '';
+      h += `<div class="branch">${renderList(b.children, b)}<button class="add-here${on('children')}" data-act="target" data-id="${b.id}" data-branch="children">+ Add steps inside</button></div>`;
+      if (b.type === 'if') h += `<div class="branch-lbl" data-mid="${b.id}">Else</div><div class="branch">${renderList(b.else, b)}<button class="add-here${on('else')}" data-act="target" data-id="${b.id}" data-branch="else">+ Add steps to Else</button></div>`;
+      h += `<div class="foot" data-foot="${b.id}">${esc(s.foot || '')}</div>`;
+    }
+    return h + '</div>';
+  }).join('');
+}
+function count(list){ return list.reduce((n, b) => n + 1 + (b.children ? count(b.children) : 0) + (b.else ? count(b.else) : 0), 0); }
+function renderSteps(){
+  const fid = document.activeElement && document.activeElement.id;
+  $('#steps').innerHTML = renderList(P.blocks, null);
+  $('#target').innerHTML = targetInfo().text;
+  $('#stepcount').textContent = count(P.blocks) + ' steps';
+  if (fid){ const el = document.getElementById(fid); if (el) el.focus(); }
+}
+
+/* ---------- output ---------- */
+function hl(line){
+  const re = /(\([^)]*\)?)|(\bo\d+\s+(?:if|elseif|else|endif|while|endwhile|do|repeat|endrepeat|break|continue)\b)|(#<[^>]+>|#\d+)|(\b[GM]\d+(?:\.\d+)?\b)|(\$[A-Za-z/]*)/gi;
+  let out = '', last = 0, m;
+  while ((m = re.exec(line))){ out += esc(line.slice(last, m.index));
+    const cls = m[1] ? 'k-c' : m[2] ? 'k-o' : m[3] ? 'k-v' : m[4] ? 'k-g' : 'k-s';
+    out += `<span class="${cls}">${esc(m[0])}</span>`; last = re.lastIndex; }
+  return out + esc(line.slice(last));
+}
+function renderOutput(){
+  $('#out').innerHTML = lastGen.lines.map(l => `<span class="l">${hl(l) || ' '}</span>`).join('');
+  $('#linecount').textContent = lastGen.lines.length + ' lines';
+  $('#compat').textContent = P.plain
+    ? 'Plain output works out every loop, condition and variable here using the preview values, so it runs on any FluidNC version. Required inputs are fixed at their preview value.'
+    : lastGen.feats.length ? 'This macro relies on ' + lastGen.feats.join(', ') + '. If your FluidNC version rejects any of these, switch Output to Plain G-code.' : 'Plain G-code only, so it should run on any FluidNC version.';
+}
+function renderStats(){
+  const s = lastSim; const mins = s.time;
+  const t = fmtTime(mins);
+  $('#stats').innerHTML = `<span><b>Est. time</b>${t}</span><span><b>Cutting</b>${Math.round(s.feedLen)} mm</span><span><b>Rapid</b>${Math.round(s.rapidLen)} mm</span><span><b>Z range</b>${fmt(s.zlo)} to ${fmt(s.zhi)}</span>`;
+  const w = s.errs.map(e => { const f = find(e.id); return `<li data-goto="${e.id}">${esc(f ? T[f.block.type].label : 'Step')}: ${esc(e.msg)}</li>`; });
+  $('#warns').innerHTML = w.length ? w.join('') : '<li class="okmsg">No problems found. Every move stays inside the machine limits.</li>';
+  const vk = Object.keys(s.vars).filter(k => !/^_[pd][a-z0-9]{4}_/.test(k) && !PRE.has(k));
+  $('#vars').textContent = vk.length ? 'Final values: ' + vk.map(k => `#<${k}> = ${fmt(s.vars[k])}`).join('   ') : '';
+}
+
+/* ---------- canvas ---------- */
+const cv = $('#cv'); let view = null;
+const tok = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+/* layout: resizable columns and hideable G-code (per-viewer, browser storage) */
+const LKEY = 'macro-bench-layout';
+let LAYOUT = { c1: 250, c2: 340, hideG: false };
+try { Object.assign(LAYOUT, JSON.parse(localStorage.getItem(LKEY)) || {}); } catch (e) {}
+function applyLayout(){
+  if ($('#mpanel').open !== !!LAYOUT.mOpen) $('#mpanel').open = !!LAYOUT.mOpen;
+  const g = document.querySelector('main.grid'); g.style.setProperty('--c1', LAYOUT.c1 + 'px'); g.style.setProperty('--c2', LAYOUT.c2 + 'px');
+  $('#gpanel').hidden = LAYOUT.hideG; $('#b-hideg').textContent = LAYOUT.hideG ? 'Show G-code' : 'Hide G-code';
+  try { localStorage.setItem(LKEY, JSON.stringify(LAYOUT)); } catch (e) {}
+}
+document.querySelectorAll('.split').forEach(sp => {
+  let d = null;
+  sp.addEventListener('pointerdown', e => { d = { x: e.clientX, c1: LAYOUT.c1, c2: LAYOUT.c2 }; sp.classList.add('on'); try { sp.setPointerCapture(e.pointerId); } catch (err) {} e.preventDefault(); });
+  sp.addEventListener('pointermove', e => { if (!d) return; const dx = e.clientX - d.x;
+    if (sp.dataset.split === '1') LAYOUT.c1 = Math.round(Math.max(190, Math.min(420, d.c1 + dx)));
+    else LAYOUT.c2 = Math.round(Math.max(240, Math.min(760, d.c2 + dx)));
+    applyLayout(); });
+  const end = () => { d = null; sp.classList.remove('on'); }; sp.addEventListener('pointerup', end); sp.addEventListener('pointercancel', end);
+  sp.addEventListener('dblclick', () => { if (sp.dataset.split === '1') LAYOUT.c1 = 250; else LAYOUT.c2 = 340; applyLayout(); });
+});
+$('#b-hideg').addEventListener('click', () => { LAYOUT.hideG = !LAYOUT.hideG; applyLayout(); draw(); });
+/* theme: Auto follows the system or host theme; Light/Dark override it */
+const ROOT = document.documentElement; let hostTheme = ROOT.getAttribute('data-theme');
+function applyTheme(){
+  const t = LAYOUT.theme || 'auto', want = t === 'auto' ? hostTheme : t;
+  if (want == null){ if (ROOT.hasAttribute('data-theme')) ROOT.removeAttribute('data-theme'); }
+  else if (ROOT.getAttribute('data-theme') !== want) ROOT.setAttribute('data-theme', want);
+  document.querySelectorAll('#theme-seg [data-th]').forEach(b => { b.classList.toggle('on', b.dataset.th === t); b.setAttribute('aria-pressed', b.dataset.th === t); });
+}
+new MutationObserver(() => { const cur = ROOT.getAttribute('data-theme'), t = LAYOUT.theme || 'auto';
+  if (t === 'auto') hostTheme = cur; else if (cur !== t) applyTheme(); }).observe(ROOT, { attributes: true, attributeFilter: ['data-theme'] });
+$('#theme-seg').addEventListener('click', e => { const b = e.target.closest('[data-th]'); if (!b) return;
+  LAYOUT.theme = b.dataset.th; try { localStorage.setItem(LKEY, JSON.stringify(LAYOUT)); } catch (err) {} applyTheme(); draw(); });
+applyTheme();
+applyLayout();
+const VIEW = { width: true, mode: 'top', frame: { top: 'machine', '3d': 'path' }, yaw: -35, el: 32, zoom: 1, zs: 1, target: null, tool: 'orbit' };
+function pathBox(s){
+  let b = { x0: s.start.x, x1: s.start.x, y0: s.start.y, y1: s.start.y, z0: s.start.z, z1: s.start.z };
+  for (const g of s.segs) for (const p of g.pts){ b.x0 = Math.min(b.x0, p.x); b.x1 = Math.max(b.x1, p.x); b.y0 = Math.min(b.y0, p.y); b.y1 = Math.max(b.y1, p.y); b.z0 = Math.min(b.z0, p.z); b.z1 = Math.max(b.z1, p.z); }
+  const pad = Math.max(2, 0.08 * Math.max(b.x1 - b.x0, b.y1 - b.y0)); b.x0 -= pad; b.x1 += pad; b.y0 -= pad; b.y1 += pad; return b;
+}
+function draw(){ if (!lastSim) return; if (VIEW.mode === '3d') draw3d(); else draw2d(); }
+function draw2d(){
+  const s = lastSim, L = s.lim;
+  let x0 = Math.min(L.x[0], L.x[1]), x1 = Math.max(L.x[0], L.x[1]), y0 = Math.min(L.y[0], L.y[1]), y1 = Math.max(L.y[0], L.y[1]);
+  if (VIEW.frame.top === 'path' && s.segs.length){ const b = pathBox(s); x0 = b.x0; x1 = b.x1; y0 = b.y0; y1 = b.y1; }
+  else for (const g of s.segs) for (const p of g.pts){ x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+  if (x1 - x0 < 1) x1 = x0 + 1; if (y1 - y0 < 1) y1 = y0 + 1;
+  const W = cv.parentElement.clientWidth; const pad = 34;
+  const H = Math.max(220, Math.min(LAYOUT.hideG ? 760 : 520, (W - pad*2) * (y1 - y0) / (x1 - x0) + pad*2));
+  const dpr = window.devicePixelRatio || 1; cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + 'px';
+  const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, W, H);
+  const sc = Math.min((W - pad*2) / (x1 - x0), (H - pad*2) / (y1 - y0));
+  const ox = (W - (x1 - x0) * sc) / 2, oy = (H + (y1 - y0) * sc) / 2;
+  const X = x => ox + (x - x0) * sc, Y = y => oy - (y - y0) * sc;
+  view = { X, Y, inv: (px, py) => ({ x: (px - ox) / sc + x0, y: (oy - py) / sc + y0 }) };
+  const col = { bed: tok('--bed'), grid: tok('--grid'), muted: tok('--muted'), ink: tok('--ink'), rapid: tok('--rapid'), feed: tok('--feed'), sel: tok('--sel'), bad: tok('--bad'), line: tok('--line'), logic: tok('--logic') };
+  // bed
+  const bx0 = Math.min(L.x[0], L.x[1]), bx1 = Math.max(L.x[0], L.x[1]), by0 = Math.min(L.y[0], L.y[1]), by1 = Math.max(L.y[0], L.y[1]);
+  c.fillStyle = col.bed; c.fillRect(X(bx0), Y(by1), (bx1 - bx0) * sc, (by1 - by0) * sc);
+  const steps = [1,2,5,10,20,25,50,100,200,250,500,1000,2000]; const gs = steps.find(v => v * sc >= 38) || 5000;
+  c.strokeStyle = col.grid; c.lineWidth = 1; c.font = '10px ' + tok('--f-mono'); c.fillStyle = col.muted;
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  for (let x = Math.ceil(bx0 / gs) * gs; x <= bx1 + 1e-9; x += gs){ c.beginPath(); c.moveTo(Math.round(X(x)) + .5, Y(by1)); c.lineTo(Math.round(X(x)) + .5, Y(by0)); c.stroke(); c.fillText(fmt(x), X(x), Y(by0) + 5); }
+  c.textAlign = 'right'; c.textBaseline = 'middle';
+  for (let y = Math.ceil(by0 / gs) * gs; y <= by1 + 1e-9; y += gs){ c.beginPath(); c.moveTo(X(bx0), Math.round(Y(y)) + .5); c.lineTo(X(bx1), Math.round(Y(y)) + .5); c.stroke(); c.fillText(fmt(y), X(bx0) - 5, Y(y)); }
+  c.strokeStyle = col.muted; c.lineWidth = 1.2; c.strokeRect(X(bx0), Y(by1), (bx1 - bx0) * sc, (by1 - by0) * sc);
+  // paths
+  const path = (g) => { c.beginPath(); g.pts.forEach((p, i) => i ? c.lineTo(X(p.x), Y(p.y)) : c.moveTo(X(p.x), Y(p.y))); c.stroke(); };
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  for (const g of s.segs){ if (g.kind !== 'rapid') continue; c.setLineDash([5, 4]); c.strokeStyle = col.rapid; c.lineWidth = 1.2; path(g); }
+  c.setLineDash([]);
+  const dia = parseFloat(P.machine.tool);
+  if (VIEW.width && dia > 0){ c.save(); c.globalAlpha = 0.2; c.strokeStyle = col.feed; c.lineWidth = Math.max(1, dia * sc); c.beginPath();
+    for (const g of s.segs){ if (g.kind === 'rapid') continue; g.pts.forEach((p, i) => i ? c.lineTo(X(p.x), Y(p.y)) : c.moveTo(X(p.x), Y(p.y))); }
+    c.stroke(); c.restore(); }
+  for (const g of s.segs){ if (g.kind === 'rapid') continue; c.strokeStyle = col.feed; c.lineWidth = 1.8; path(g); }
+  const selIds = new Set(); if (sel.id){ const f = find(sel.id); if (f){ (function all(b){ selIds.add(b.id); (b.children || []).forEach(all); (b.else || []).forEach(all); })(f.block); } }
+  for (const g of s.segs){ if (!selIds.has(g.id)) continue; c.setLineDash(g.kind === 'rapid' ? [6, 4] : []); c.strokeStyle = col.sel; c.lineWidth = 3.2; path(g); }
+  c.setLineDash([]);
+  c.fillStyle = col.bad; for (const g of s.segs) g.pts.forEach((p, i) => { if (g.bad[i]){ c.beginPath(); c.arc(X(p.x), Y(p.y), 4, 0, 7); c.fill(); } });
+  drawPlayed(c, p => [X(p.x), Y(p.y)], col, dia > 0 ? dia / 2 * sc : 0);
+  // markers
+  c.font = '600 10px ' + tok('--f-mono');
+  s.origins.forEach((o, n) => { const wx = o.x, wy = o.y; c.strokeStyle = col.logic; c.lineWidth = 1.4;
+    c.beginPath(); c.moveTo(X(wx) - 9, Y(wy)); c.lineTo(X(wx) + 9, Y(wy)); c.moveTo(X(wx), Y(wy) - 9); c.lineTo(X(wx), Y(wy) + 9); c.stroke();
+    c.beginPath(); c.arc(X(wx), Y(wy), 5, 0, 7); c.stroke();
+    c.fillStyle = col.logic; c.textAlign = 'left'; c.textBaseline = 'bottom'; c.fillText(s.origins.length > 1 ? 'WORK 0 #' + (n + 1) : 'WORK 0', X(wx) + 8, Y(wy) - 6); });
+  c.strokeStyle = col.ink; c.lineWidth = 1.6; c.beginPath(); c.arc(X(s.start.x), Y(s.start.y), 5, 0, 7); c.stroke();
+  c.fillStyle = col.ink; c.textAlign = 'left'; c.textBaseline = 'top'; c.fillText((P.machine.ref || 'machine') === 'machine' ? 'HOME' : 'START', X(s.start.x) + 8, Y(s.start.y) + 4);
+  c.beginPath(); c.arc(X(s.end.x), Y(s.end.y), 3.5, 0, 7); c.fill();
+  c.fillStyle = col.muted; c.textAlign = 'left'; c.textBaseline = 'top'; c.font = '10px ' + tok('--f-mono'); c.fillText('X →   Y ↑', 8, 8);
+}
+function draw3d(){
+  const s = lastSim, L = s.lim; view = null;
+  const W = cv.parentElement.clientWidth, H = Math.max(300, Math.min(LAYOUT.hideG ? 760 : 520, W * 0.72));
+  const dpr = window.devicePixelRatio || 1; cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + 'px';
+  const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, W, H);
+  const col = { grid: tok('--grid'), muted: tok('--muted'), ink: tok('--ink'), rapid: tok('--rapid'), feed: tok('--feed'), sel: tok('--sel'), bad: tok('--bad'), logic: tok('--logic'), line: tok('--line') };
+  const M = { x0: Math.min(...L.x), x1: Math.max(...L.x), y0: Math.min(...L.y), y1: Math.max(...L.y), z0: Math.min(...L.z), z1: Math.max(...L.z) };
+  const bb = VIEW.frame['3d'] === 'path' && s.segs.length ? pathBox(s) : M;
+  const zs = VIEW.zs;
+  if (!VIEW.target) VIEW.target = { x: (bb.x0 + bb.x1) / 2, y: (bb.y0 + bb.y1) / 2, z: (bb.z0 + bb.z1) / 2 };
+  const T0 = VIEW.target;
+  const cyw = Math.cos(VIEW.yaw * DEG), syw = Math.sin(VIEW.yaw * DEG), ce = Math.cos(VIEW.el * DEG), se = Math.sin(VIEW.el * DEG);
+  const proj = p => { const x = p.x - T0.x, y = p.y - T0.y, z = (p.z - T0.z) * zs; const xr = x * cyw - y * syw, yr = x * syw + y * cyw; return [xr, z * ce + yr * se]; };
+  // scale from the bounding sphere, so it stays the same at every orbit angle
+  const radius = Math.max(1, 0.5 * Math.hypot(bb.x1 - bb.x0, bb.y1 - bb.y0, (bb.z1 - bb.z0) * zs));
+  const sc = (Math.min(W, H) - 40) / (2 * radius) * VIEW.zoom;
+  VIEW.basis = { sc, W, H, right: { x: cyw, y: -syw, z: 0 }, up: { x: syw * se, y: cyw * se, z: ce / zs } };
+  const S = p => { const [a, b] = proj(p); return [W / 2 + a * sc, H / 2 - b * sc]; };
+  const line = (pts) => { c.beginPath(); pts.forEach((p, i) => { const [a, b] = S(p); i ? c.lineTo(a, b) : c.moveTo(a, b); }); c.stroke(); };
+  // floor grid under the framed area
+  const fz = bb.z0, span = Math.max(bb.x1 - bb.x0, bb.y1 - bb.y0);
+  const gs = [1,2,5,10,20,25,50,100,200,250,500,1000].find(v => span / v <= 16) || 2000;
+  c.strokeStyle = col.grid; c.lineWidth = 1;
+  for (let x = Math.ceil(bb.x0 / gs) * gs; x <= bb.x1; x += gs) line([{ x, y: bb.y0, z: fz }, { x, y: bb.y1, z: fz }]);
+  for (let y = Math.ceil(bb.y0 / gs) * gs; y <= bb.y1; y += gs) line([{ x: bb.x0, y, z: fz }, { x: bb.x1, y, z: fz }]);
+  // machine travel box
+  c.strokeStyle = col.muted; c.lineWidth = 1; c.setLineDash([2, 3]);
+  const box = (b) => { for (const z of [b.z0, b.z1]) line([{x:b.x0,y:b.y0,z},{x:b.x1,y:b.y0,z},{x:b.x1,y:b.y1,z},{x:b.x0,y:b.y1,z},{x:b.x0,y:b.y0,z}]);
+    for (const x of [b.x0, b.x1]) for (const y of [b.y0, b.y1]) line([{ x, y, z: b.z0 }, { x, y, z: b.z1 }]); };
+  box(M); c.setLineDash([]);
+  // floor shadow of cutting moves
+  c.globalAlpha = 0.28; c.strokeStyle = col.muted; c.lineWidth = 1;
+  for (const g of s.segs) if (g.kind !== 'rapid') line(g.pts.map(p => ({ x: p.x, y: p.y, z: fz })));
+  c.globalAlpha = 1; c.lineCap = 'round'; c.lineJoin = 'round';
+  for (const g of s.segs){ if (g.kind !== 'rapid') continue; c.setLineDash([5, 4]); c.strokeStyle = col.rapid; c.lineWidth = 1.2; line(g.pts); }
+  c.setLineDash([]);
+  for (const g of s.segs){ if (g.kind === 'rapid') continue; c.strokeStyle = col.feed; c.lineWidth = 1.8; line(g.pts); }
+  const selIds = new Set(); if (sel.id){ const f = find(sel.id); if (f){ (function all(b){ selIds.add(b.id); (b.children || []).forEach(all); (b.else || []).forEach(all); })(f.block); } }
+  for (const g of s.segs){ if (!selIds.has(g.id)) continue; c.setLineDash(g.kind === 'rapid' ? [6, 4] : []); c.strokeStyle = col.sel; c.lineWidth = 3.2; line(g.pts); }
+  c.setLineDash([]);
+  c.fillStyle = col.bad; for (const g of s.segs) g.pts.forEach((p, i) => { if (g.bad[i]){ const [a, b] = S(p); c.beginPath(); c.arc(a, b, 4, 0, 7); c.fill(); } });
+  { const dia = parseFloat(P.machine.tool); drawPlayed(c, S, col, dia > 0 ? dia / 2 * sc : 0); }
+  // markers
+  c.font = '600 10px ' + tok('--f-mono'); c.textAlign = 'left';
+  s.origins.forEach((o, n) => { const [a, b] = S({ x: o.x, y: o.y, z: o.z || 0 }); c.strokeStyle = col.logic; c.lineWidth = 1.4; c.beginPath(); c.arc(a, b, 5, 0, 7); c.stroke();
+    c.fillStyle = col.logic; c.textBaseline = 'bottom'; c.fillText(s.origins.length > 1 ? 'WORK 0 #' + (n + 1) : 'WORK 0', a + 8, b - 6); });
+  { const [a, b] = S(s.start); c.strokeStyle = col.ink; c.lineWidth = 1.6; c.beginPath(); c.arc(a, b, 5, 0, 7); c.stroke();
+    c.fillStyle = col.ink; c.textBaseline = 'top'; c.fillText((P.machine.ref || 'machine') === 'machine' ? 'HOME' : 'START', a + 8, b + 4);
+    const [e1, e2] = S(s.end); c.beginPath(); c.arc(e1, e2, 3.5, 0, 7); c.fill(); }
+  // axis triad
+  const ox = 34, oy = H - 30, ax = (dx, dy, dz, lab, colr) => { const x = dx * cyw - dy * syw, yr = dx * syw + dy * cyw, up = dz * ce + yr * se;
+    c.strokeStyle = colr; c.lineWidth = 1.6; c.beginPath(); c.moveTo(ox, oy); c.lineTo(ox + x * 20, oy - up * 20); c.stroke(); c.fillStyle = colr; c.textBaseline = 'middle'; c.textAlign = 'center'; c.fillText(lab, ox + x * 28, oy - up * 28); };
+  ax(1, 0, 0, 'X', col.feed); ax(0, 1, 0, 'Y', col.ok || col.logic); ax(0, 0, 1, 'Z', col.sel);
+  c.textAlign = 'left'; c.textBaseline = 'top'; c.fillStyle = col.muted; c.font = '10px ' + tok('--f-mono');
+  if (zs > 1) c.fillText('Z exaggerated ×' + zs, 8, 8);
+}
+// view controls
+function syncView(){
+  const is3 = VIEW.mode === '3d';
+  $('#v-top').classList.toggle('on', !is3); $('#v-3d').classList.toggle('on', is3);
+  $('#v-zs-wrap').hidden = !is3; $('#v-reset').hidden = !is3; $('#v-hint').hidden = !is3; $('#v-tool').hidden = !is3; $('#v-presets').hidden = !is3;
+  $('#v-frame').value = VIEW.frame[VIEW.mode]; cv.classList.toggle('is3d', is3); $('#v-width-wrap').hidden = is3;
+  if (!is3) $('#readout').textContent = '';
+  draw();
+}
+$('#v-top').addEventListener('click', () => { VIEW.mode = 'top'; syncView(); });
+$('#v-3d').addEventListener('click', () => { VIEW.mode = '3d'; syncView(); });
+$('#v-frame').addEventListener('change', e => { VIEW.frame[VIEW.mode] = e.target.value; VIEW.zoom = 1; VIEW.target = null; draw(); });
+$('#v-zs').addEventListener('input', e => { VIEW.zs = +e.target.value; $('#v-zs-val').textContent = e.target.value; draw(); });
+const resetView = () => { Object.assign(VIEW, { zoom: 1, target: null }); draw(); };
+$('#v-tool').addEventListener('click', e => { const b = e.target.closest('[data-tool]'); if (!b) return; VIEW.tool = b.dataset.tool;
+  $('#v-tool').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); });
+const PRESETS = { iso: [-35, 32], top: [0, 90], front: [0, 0], right: [-90, 0] };
+$('#v-presets').addEventListener('click', e => { const b = e.target.closest('[data-pv]'); if (!b) return; [VIEW.yaw, VIEW.el] = PRESETS[b.dataset.pv]; draw(); });
+$('#v-reset').addEventListener('click', resetView);
+cv.addEventListener('dblclick', () => { if (VIEW.mode === '3d') resetView(); });
+let drag = null, raf = 0; const redraw = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); };
+const moveTarget = (du, dv) => { const B = VIEW.basis, t = VIEW.target; if (!B || !t) return; // du, dv in world units along screen right / up
+  t.x += B.right.x * du + B.up.x * dv; t.y += B.right.y * du + B.up.y * dv; t.z += B.right.z * du + B.up.z * dv; };
+cv.addEventListener('pointerdown', e => { if (VIEW.mode !== '3d') return; if (e.button === 1) e.preventDefault();
+  drag = { x: e.clientX, y: e.clientY, pan: VIEW.tool === 'pan' || e.shiftKey || e.button === 1 || e.button === 2 }; try { cv.setPointerCapture(e.pointerId); } catch (err) {} });
+cv.addEventListener('pointermove', e => { if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY;
+  if (drag.pan){ const sc = VIEW.basis ? VIEW.basis.sc : 1; moveTarget(-dx / sc, dy / sc); }
+  else { VIEW.yaw -= dx * 0.5; VIEW.el = Math.max(-5, Math.min(90, VIEW.el + dy * 0.4)); } redraw(); });
+const endDrag = () => { drag = null; }; cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
+cv.addEventListener('contextmenu', e => { if (VIEW.mode === '3d') e.preventDefault(); });
+cv.addEventListener('auxclick', e => { if (VIEW.mode === '3d') e.preventDefault(); });
+cv.addEventListener('wheel', e => { if (VIEW.mode !== '3d' || !VIEW.basis) return; e.preventDefault();
+  const B = VIEW.basis, r = cv.getBoundingClientRect(), u = e.clientX - r.left - B.W / 2, v = -(e.clientY - r.top - B.H / 2);
+  const z0 = VIEW.zoom, z1 = Math.max(0.2, Math.min(200, z0 * Math.exp(-e.deltaY * 0.0015))), sc1 = B.sc * z1 / z0;
+  moveTarget(u / B.sc - u / sc1, v / B.sc - v / sc1); // keep the point under the cursor still
+  VIEW.zoom = z1; B.sc = sc1; redraw(); }, { passive: false });
+cv.addEventListener('mousemove', e => { if (!view) return; const r = cv.getBoundingClientRect(); const p = view.inv(e.clientX - r.left, e.clientY - r.top);
+  $('#readout').textContent = 'X ' + p.x.toFixed(1) + '  Y ' + p.y.toFixed(1); });
+cv.addEventListener('mouseleave', () => { $('#readout').textContent = ''; });
+new ResizeObserver(() => draw()).observe(cv.parentElement);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+/* ---------- update cycle ---------- */
+function compute(){ lastSim = simulate({ flat: !!P.plain }); lastGen = generate(lastSim); }
+function refreshAll(skipRecord){ compute(); renderSteps(); renderOutput(); renderStats(); syncPlayer(); draw(); save(); if (!skipRecord) record(false); tutRender(); }
+function refreshLight(){ // keeps inputs in place while typing
+  compute();
+  document.querySelectorAll('[data-sum]').forEach(el => { const s = lastGen.sum[el.dataset.sum]; if (s) el.textContent = s.head; });
+  document.querySelectorAll('[data-foot]').forEach(el => { const s = lastGen.sum[el.dataset.foot]; if (s) el.textContent = s.foot; });
+  const errIds = new Set(lastSim.errs.map(e => e.id));
+  document.querySelectorAll('.step').forEach(el => el.classList.toggle('has-err', errIds.has(el.dataset.id)));
+  renderOutput(); renderStats(); syncPlayer(); draw(); save(); record(true); tutRender();
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', e => {
+  const add = e.target.closest('[data-add]');
+  if (add){ const t = targetInfo(); const b = mk(add.dataset.add); t.list.splice(t.index, 0, b);
+    if (T[b.type].pattern){ const pr = simulate({ probe: b.id }).probe; if (pr){ const keys = b.cx != null ? ['cx','cy'] : ['x0','y0']; b[keys[0]] = fmt(pr.x); b[keys[1]] = fmt(pr.y); } }
+    sel = T[b.type].container ? { id: b.id, branch: 'children' } : { id: b.id, branch: null }; refreshAll(); return; }
+  const g = e.target.closest('[data-goto]'); if (g){ sel = { id: g.dataset.goto, branch: null }; refreshAll();
+    const el = document.querySelector(`.step[data-id="${g.dataset.goto}"]`); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+  const a = e.target.closest('[data-act]'); if (!a || a.disabled) return;
+  const id = a.dataset.id, act = a.dataset.act, f = find(id); if (!f) return;
+  if (act === 'help'){ openRef(f.block.type === 'patgroup' ? f.block.pattern.type : f.block.type); return; }
+  if (act === 'select'){ if (e.target.closest('.tools')) return; sel = (sel.id === id && !sel.branch) ? { id: null, branch: null } : { id, branch: null }; }
+  else if (act === 'target'){ sel = { id, branch: a.dataset.branch }; }
+  else if (act === 'up' && f.index > 0){ f.list.splice(f.index - 1, 0, f.list.splice(f.index, 1)[0]); }
+  else if (act === 'down' && f.index < f.list.length - 1){ f.list.splice(f.index + 1, 0, f.list.splice(f.index, 1)[0]); }
+  else if (act === 'in'){ const prev = f.list[f.index - 1]; if (prev && prev.children){ f.list.splice(f.index, 1); prev.children.push(f.block); } }
+  else if (act === 'out' && f.parent){ f.list.splice(f.index, 1); const pf = find(f.parent.id); pf.list.splice(pf.index + 1, 0, f.block); }
+  else if (act === 'explode'){ const parts = JSON.parse(JSON.stringify(expand(f.block)));
+    (function re(list){ list.forEach(x => { x.id = uid(); if (x.children) re(x.children); if (x.else) re(x.else); }); })(parts);
+    const g = { id: uid(), type: 'patgroup', pattern: JSON.parse(JSON.stringify(f.block)), children: parts };
+    f.list.splice(f.index, 1, g); sel = { id: g.id, branch: null }; }
+  else if (act === 'collapse'){
+    const strip = x => JSON.stringify(x, (k, v) => k === 'id' ? undefined : v);
+    const edited = strip(f.block.children) !== strip(expand(f.block.pattern));
+    if (edited && armCollapse !== id){ armCollapse = id; a.textContent = 'Your edits will be lost. Click again to collapse'; a.classList.add('warn');
+      setTimeout(() => { if (armCollapse === id){ armCollapse = null; a.textContent = 'Collapse back to pattern'; a.classList.remove('warn'); } }, 3500); return; }
+    armCollapse = null; f.list.splice(f.index, 1, f.block.pattern); sel = { id: f.block.pattern.id, branch: null }; }
+  else if (act === 'dup'){ const copy = JSON.parse(JSON.stringify(f.block)); (function re(b){ b.id = uid(); (b.children || []).forEach(re); (b.else || []).forEach(re); })(copy); f.list.splice(f.index + 1, 0, copy); sel = { id: copy.id, branch: null }; }
+  else if (act === 'del'){ f.list.splice(f.index, 1); if (sel.id === id || !find(sel.id)) sel = f.list[f.index - 1] ? { id: f.list[f.index - 1].id, branch: null } : (f.parent ? { id: f.parent.id, branch: 'children' } : { id: null, branch: null }); }
+  refreshAll();
+});
+$('#steps').addEventListener('input', e => {
+  const el = e.target; if (!el.dataset.k) return; const f = find(el.dataset.id); if (!f) return;
+  f.block[el.dataset.k] = el.value;
+  if (el.dataset.expr){ const er = exprErr(el.value); el.classList.toggle('bad', !!er); const sp = document.getElementById(el.id + '-e'); if (sp) sp.textContent = er || ''; }
+  refreshLight();
+});
+document.querySelectorAll('[data-m]').forEach(i => i.addEventListener('input', () => { P.machine[i.dataset.m] = i.value; if (i.dataset.m === 'ref') syncRef(); machSummary(); refreshLight(); }));
+$('#pal-q').addEventListener('input', renderPalette);
+$('#pal-q').addEventListener('keydown', e => { if (e.key === 'Enter'){ const b = $('#palette [data-add]'); if (b){ e.preventDefault(); b.click(); } } if (e.key === 'Escape'){ e.target.value = ''; renderPalette(); } });
+$('#mpanel').addEventListener('toggle', () => { LAYOUT.mOpen = $('#mpanel').open; try { localStorage.setItem(LKEY, JSON.stringify(LAYOUT)); } catch (e) {} });
+document.addEventListener('click', e => { const m = $('#filemenu'); if (m.open && !e.target.closest('#filemenu')) m.open = false;
+  if (e.target.closest('#filemenu [data-close]')) m.open = false; });
+$('#mname').addEventListener('input', e => { P.name = e.target.value; refreshLight(); });
+$('#o-head').addEventListener('change', e => { P.head = e.target.checked; refreshLight(); });
+$('#o-indent').addEventListener('change', e => { P.indent = e.target.checked; refreshAll(); });
+$('#o-mode').addEventListener('change', e => { P.plain = e.target.value === 'plain'; refreshAll(); });
+$('#v-width').addEventListener('change', e => { VIEW.width = e.target.checked; draw(); });
+
+function copyText(text, btn, done){
+  const ok = () => { const o = btn.textContent; btn.textContent = done; setTimeout(() => btn.textContent = o, 1400); };
+  const fallback = () => { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+    let r = false; try { r = document.execCommand('copy'); } catch (e) {} ta.remove(); if (r) ok(); else { const rng = document.createRange(); rng.selectNodeContents($('#out')); const s = getSelection(); s.removeAllRanges(); s.addRange(rng); btn.textContent = 'Press Ctrl+C'; setTimeout(() => btn.textContent = 'Copy G-code', 2200); } };
+  try { navigator.clipboard.writeText(text).then(ok, fallback); } catch (e) { fallback(); }
+}
+$('#b-copy').addEventListener('click', e => copyText(lastGen.text + '\n', e.currentTarget, 'Copied'));
+$('#b-export').addEventListener('click', e => copyText(JSON.stringify(P, null, 2), e.currentTarget, 'Project copied'));
+$('#b-import').addEventListener('click', () => $('#f-import').click());
+$('#f-import').addEventListener('change', e => { const file = e.target.files[0]; if (!file) return; const rd = new FileReader();
+  rd.onload = () => { try { const d = JSON.parse(rd.result); if (!Array.isArray(d.blocks)) throw 0; d.machine = Object.assign({...DEFAULT_MACHINE}, d.machine || {}); P = d; sel = { id: null, branch: null }; renderMachine(); refreshAll(); }
+    catch (err) { const b = $('#b-import'); b.textContent = 'Not a Macro Bench file'; setTimeout(() => b.textContent = 'Import project', 2200); } };
+  rd.readAsText(file); e.target.value = ''; });
+let armNew = null, armEx = null, armCollapse = null;
+$('#b-new').addEventListener('click', e => { const b = e.currentTarget;
+  if (!armNew){ b.textContent = 'Click again to clear'; b.classList.add('warn'); armNew = setTimeout(() => { armNew = null; b.textContent = 'New macro'; b.classList.remove('warn'); }, 3000); return; }
+  clearTimeout(armNew); armNew = null; b.textContent = 'New macro'; b.classList.remove('warn');
+  P = { name: 'macro.nc', head: true, indent: false, machine: { ...P.machine }, blocks: [mk('units'), mk('distance')] }; sel = { id: null, branch: null }; renderMachine(); refreshAll(); });
+$('#b-example').addEventListener('click', e => { const b = e.currentTarget;
+  if (!armEx){ b.textContent = 'Replace current macro?'; b.classList.add('warn'); armEx = setTimeout(() => { armEx = null; b.textContent = 'Load example'; b.classList.remove('warn'); }, 3000); return; }
+  clearTimeout(armEx); armEx = null; b.textContent = 'Load example'; b.classList.remove('warn');
+  P = $('#ex-pick').value === 'marks' ? exampleMarks(P.machine) : example(P.machine); sel = { id: null, branch: null }; renderMachine(); refreshAll(); });
+
+// downloads (granted by the viewer; hidden when unavailable)
+let DL = null;
+const baseName = () => (String(P.name || 'macro').trim().replace(/\.[a-z0-9]+$/i, '').replace(/[^\w.-]+/g, '_') || 'macro');
+async function offer(btn, filename, data, label){
+  if (!DL) return;
+  try { await DL.save({ filename, data }); btn.textContent = 'Saved'; }
+  catch (e){ const c = e && e.code;
+    btn.textContent = c === 'declined' ? label : c === 'rate_limited' ? 'Try again in a moment' : 'Download not available here';
+    if (c === 'unavailable' || c === 'not_granted' || c === 'capability_disabled' || c === 'capability_removed'){ DL = null; }
+  }
+  setTimeout(() => { btn.textContent = label; if (!DL){ $('#b-dl').hidden = true; $('#b-dlproj').hidden = true; $('#dl-note').hidden = true; } }, 1800);
+}
+$('#b-dl').addEventListener('click', e => offer(e.currentTarget, baseName() + '.txt', lastGen.text + '\n', 'Download'));
+$('#b-dlproj').addEventListener('click', e => offer(e.currentTarget, baseName() + '.macrobench.json', JSON.stringify(P, null, 2), 'Download project'));
+try { window.claude?.use?.('downloads').then(d => { if (!d) return; DL = d; $('#b-dl').hidden = false; $('#b-dlproj').hidden = false; $('#dl-note').hidden = false; }).catch(() => {}); } catch (e) {}
+
+/* ---------- playback ---------- */
+const PLAY = { t: null, playing: false, last: 0 };
+const playTotal = () => lastSim ? lastSim.time : 0;
+function playState(t){
+  const segs = lastSim.segs; let lo = 0, hi = segs.length - 1, idx = -1;
+  while (lo <= hi){ const m = (lo + hi) >> 1; if (segs[m].t0 < t - 1e-12){ idx = m; lo = m + 1; } else hi = m - 1; }
+  if (idx < 0) return { idx: -1, seg: null, pos: { ...lastSim.start }, partial: [] };
+  const g = segs[idx], dur = g.t1 - g.t0, frac = dur > 1e-12 ? Math.min(1, Math.max(0, (t - g.t0) / dur)) : 1;
+  let want = frac * g.len, partial = [g.pts[0]], pos = { ...g.pts[g.pts.length - 1] };
+  for (let i = 1; i < g.pts.length; i++){ const a = g.pts[i-1], b = g.pts[i], l = Math.hypot(b.x-a.x, b.y-a.y, b.z-a.z);
+    if (want <= l || i === g.pts.length - 1){ const u = l > 0 ? Math.min(1, want / l) : 1; pos = { x: a.x + (b.x-a.x)*u, y: a.y + (b.y-a.y)*u, z: a.z + (b.z-a.z)*u }; partial.push(pos); break; }
+    want -= l; partial.push(b); }
+  return { idx, seg: g, pos, partial };
+}
+function drawPlayed(c, toXY, col, toolPx){
+  if (PLAY.t == null || !lastSim.segs.length) return;
+  const st = playState(PLAY.t);
+  const poly = pts => { c.beginPath(); pts.forEach((p, i) => { const [x, y] = toXY(p); i ? c.lineTo(x, y) : c.moveTo(x, y); }); c.stroke(); };
+  c.save(); c.globalAlpha = 0.8; c.strokeStyle = col.ink; c.lineWidth = 2.2; c.setLineDash([]); c.lineCap = 'round'; c.lineJoin = 'round';
+  for (let i = 0; i < st.idx; i++) poly(lastSim.segs[i].pts);
+  if (st.seg) poly(st.partial);
+  c.restore();
+  const [x, y] = toXY(st.pos), r = Math.max(5, toolPx);
+  c.save(); c.fillStyle = col.sel; c.globalAlpha = 0.25; c.beginPath(); c.arc(x, y, r, 0, 7); c.fill(); c.globalAlpha = 1;
+  c.strokeStyle = col.sel; c.lineWidth = 2; c.stroke(); c.beginPath(); c.moveTo(x - r - 4, y); c.lineTo(x + r + 4, y); c.moveTo(x, y - r - 4); c.lineTo(x, y + r + 4); c.stroke(); c.restore();
+}
+function updatePlayer(scroll){
+  const tot = playTotal(), active = PLAY.t != null;
+  $('#p-pos').value = active && tot > 0 ? Math.round(PLAY.t / tot * 1000) : 0;
+  $('#p-play').textContent = PLAY.playing ? 'Pause' : 'Play';
+  $('#p-clear').hidden = !active; $('#p-info').hidden = !active;
+  document.querySelectorAll('.step.is-play').forEach(el => el.classList.remove('is-play'));
+  if (!active || !lastSim.segs.length) return;
+  const st = playState(PLAY.t), g = st.seg, p = st.pos;
+  let html = '';
+  if (g){
+    const f = find(g.id), lab = f ? T[f.block.type].label : 'Step', code = (lastGen.sum[g.id] || {}).head || '';
+    const k = g.k || 1, w = { x: (p.x - g.off.x) / k, y: (p.y - g.off.y) / k, z: (p.z - g.off.z) / k }, f1 = v => v.toFixed(2);
+    const vk = Object.keys(g.vars).filter(n => !/^_[pd][a-z0-9]{4}_/.test(n) && !PRE.has(n));
+    html = `<b>${esc(lab)}</b> <span class="pv">${esc(code)}</span><br>Work X ${f1(w.x)} Y ${f1(w.y)} Z ${f1(w.z)} · Machine X ${f1(p.x)} Y ${f1(p.y)} Z ${f1(p.z)}<br>` +
+      (g.kind === 'rapid' ? 'Rapid' : 'Feed ' + (g.f ? fmt(g.f) + ' mm/min' : 'not set')) + ' · ' + fmtTime(PLAY.t) + ' of ' + fmtTime(tot) +
+      (vk.length ? '<br><span class="pv">' + vk.map(n => esc('#<' + n + '> = ' + fmt(g.vars[n]))).join('   ') + '</span>' : '');
+    const el = document.querySelector(`.step[data-id="${g.id}"]`);
+    if (el){ el.classList.add('is-play'); if (scroll && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' }); }
+  } else html = 'At the start position · ' + fmtTime(PLAY.t) + ' of ' + fmtTime(tot);
+  $('#p-info').innerHTML = html; tutRender();
+}
+function syncPlayer(){ if (PLAY.t != null) PLAY.t = Math.min(PLAY.t, playTotal()); const none = !lastSim.segs.length;
+  ['#p-play','#p-prev','#p-next','#p-pos'].forEach(q => $(q).disabled = none); updatePlayer(); }
+function tick(ts){
+  if (!PLAY.playing) return;
+  const dt = PLAY.last ? (ts - PLAY.last) / 1000 : 0; PLAY.last = ts;
+  PLAY.t = Math.min(playTotal(), PLAY.t + dt * (+$('#p-speed').value) / 60);
+  if (PLAY.t >= playTotal()) PLAY.playing = false;
+  updatePlayer(); draw(); if (PLAY.playing) requestAnimationFrame(tick);
+}
+$('#p-play').addEventListener('click', () => {
+  if (PLAY.playing){ PLAY.playing = false; updatePlayer(); return; }
+  if (PLAY.t == null || PLAY.t >= playTotal() - 1e-9) PLAY.t = 0;
+  PLAY.playing = true; PLAY.last = 0; updatePlayer(); requestAnimationFrame(tick);
+});
+$('#p-pos').addEventListener('input', e => { PLAY.playing = false; PLAY.t = (+e.target.value) / 1000 * playTotal(); updatePlayer(); draw(); });
+$('#p-next').addEventListener('click', () => { PLAY.playing = false; const t = PLAY.t == null ? -1 : PLAY.t;
+  const g = lastSim.segs.find(x => x.t1 > t + 1e-9 && x.len > 1e-9); PLAY.t = g ? g.t1 : playTotal(); updatePlayer(true); draw(); });
+$('#p-prev').addEventListener('click', () => { PLAY.playing = false; const t = PLAY.t == null ? playTotal() : PLAY.t;
+  let g = null; for (const x of lastSim.segs) if (x.t0 < t - 1e-9 && x.len > 1e-9) g = x; PLAY.t = g ? g.t0 : 0; updatePlayer(true); draw(); });
+$('#p-clear').addEventListener('click', () => { PLAY.playing = false; PLAY.t = null; updatePlayer(); draw(); });
+
+/* ---------- undo / redo ---------- */
+const HIST = { stack: [], i: -1, t: 0, soft: false };
+function syncUndo(){ $('#b-undo').disabled = HIST.i <= 0; $('#b-redo').disabled = HIST.i >= HIST.stack.length - 1; }
+function record(soft){
+  let j; try { j = JSON.stringify(P); } catch (e) { return; }
+  if (HIST.stack[HIST.i] === j) return;
+  const now = Date.now();
+  if (soft && HIST.soft && now - HIST.t < 1000 && HIST.i > 0) HIST.stack[HIST.i] = j;
+  else { HIST.stack.splice(HIST.i + 1); HIST.stack.push(j); if (HIST.stack.length > 200) HIST.stack.shift(); HIST.i = HIST.stack.length - 1; }
+  HIST.t = now; HIST.soft = soft; syncUndo();
+}
+function travel(d){
+  const i = HIST.i + d; if (i < 0 || i >= HIST.stack.length) return;
+  HIST.i = i; HIST.soft = false; P = JSON.parse(HIST.stack[i]); P.machine = Object.assign({...DEFAULT_MACHINE}, P.machine || {});
+  if (sel.id && !find(sel.id)) sel = { id: null, branch: null };
+  renderMachine(); refreshAll(true); syncUndo();
+}
+$('#b-undo').addEventListener('click', () => travel(-1));
+$('#b-redo').addEventListener('click', () => travel(1));
+document.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey)) return; const k = e.key.toLowerCase(); if (k !== 'z' && k !== 'y') return;
+  const t = e.target; if (t && ((t.tagName === 'INPUT' && !['checkbox','range','file'].includes(t.type)) || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  e.preventDefault(); travel(k === 'y' || e.shiftKey ? 1 : -1);
+});
+
+/* ---------- G-code import ---------- */
+function tokenize(s){
+  const out = []; let i = 0;
+  while (i < s.length){
+    const ch = s[i]; if (/\s/.test(ch)){ i++; continue; }
+    if (!/[A-Za-z]/.test(ch)) return null;
+    const L = ch.toUpperCase(); i++; while (s[i] === ' ') i++;
+    let v = '';
+    if (s[i] === '['){ let d = 0, j = i; for (; j < s.length; j++){ if (s[j] === '[') d++; else if (s[j] === ']'){ d--; if (d === 0) break; } } if (d !== 0) return null; v = s.slice(i, j + 1); i = j + 1; }
+    else if (s[i] === '#'){ const m = s.slice(i).match(/^#\s*(<[^>]+>|\d+)/); if (!m) return null; v = m[0].replace(/\s+/g, ''); i += m[0].length; }
+    else { const m = s.slice(i).match(/^[-+]?(\d+\.?\d*|\.\d+)/); if (!m) return null; v = m[0]; i += m[0].length; }
+    out.push([L, v]);
+  }
+  return out;
+}
+function parseGcode(text){
+  const root = [], stack = [{ list: root }]; let motion = 'G0', raws = 0, steps = 0;
+  const cur = () => stack[stack.length - 1].list;
+  const push = b => { cur().push(b); steps++; };
+  const raw = t => { push(mk('raw', { text: t })); raws++; };
+  const unwrap = v => { v = String(v).trim(); return oneGroup(v) ? v.slice(1, -1).trim() : v; };
+  const reid = list => list.map(x => { const c = JSON.parse(JSON.stringify(x)); (function re(b){ b.id = uid(); (b.children || []).forEach(re); (b.else || []).forEach(re); })(c); return c; });
+  for (const rawLine of String(text).split(/\r?\n/)){
+    let line = rawLine.trim(); if (!line || line === '%') continue;
+    line = line.replace(/^N\d+\s*/i, '');
+    const cm = line.match(/^\(\s*(.*?)\s*\)$/);
+    if (cm){ const t = cm[1]; if (/^MSG\s*,/i.test(t)) push(mk('msg', { text: t.replace(/^MSG\s*,\s*/i, '') })); else push(mk('comment', { text: t })); continue; }
+    if (line[0] === ';'){ push(mk('comment', { text: line.slice(1).trim() })); continue; }
+    const code = line.replace(/\([^)]*\)/g, ' ').replace(/;.*$/, '').trim(); if (!code) continue;
+    const o = code.match(/^o\s*(\d+|<[^>]+>)\s+([a-z]+)\s*(.*)$/i);
+    if (o){
+      const n = o[1], kind = o[2].toLowerCase(), rest = o[3].trim(), top = stack[stack.length - 1];
+      if (kind === 'if'){ const b = mk('if', { cond: unwrap(rest) }); push(b); stack.push({ list: b.children, n, kind: 'if', cur: b }); continue; }
+      if (['elseif','else','endif'].includes(kind) && top.kind === 'if' && top.n === n){
+        if (kind === 'elseif'){ const nb = mk('if', { cond: unwrap(rest) }); top.cur.else.push(nb); top.cur = nb; top.list = nb.children; steps++; }
+        else if (kind === 'else') top.list = top.cur.else; else stack.pop();
+        continue; }
+      if (kind === 'while' && top.kind === 'do' && top.n === n){ stack.pop(); const body = top.list; cur().push(...body); push(mk('while', { cond: unwrap(rest), children: reid(body) })); continue; }
+      if (kind === 'while'){ const b = mk('while', { cond: unwrap(rest) }); push(b); stack.push({ list: b.children, n, kind: 'while' }); continue; }
+      if (kind === 'endwhile' && top.kind === 'while' && top.n === n){ stack.pop(); continue; }
+      if (kind === 'do'){ stack.push({ list: [], n, kind: 'do' }); continue; }
+      if (kind === 'repeat'){ const b = mk('repeat', { count: unwrap(rest) }); push(b); stack.push({ list: b.children, n, kind: 'repeat' }); continue; }
+      if (kind === 'endrepeat' && top.kind === 'repeat' && top.n === n){ stack.pop(); continue; }
+      if (kind === 'break'){ push(mk('brk')); continue; }
+      if (kind === 'continue'){ push(mk('cont')); continue; }
+      raw(code); continue;
+    }
+    const as = code.match(/^#\s*<\s*([^>]+?)\s*>\s*=\s*(.+)$/);
+    if (as){ push(mk('set', { name: as[1], value: unwrap(as[2]) })); continue; }
+    const hm = code.match(/^\$H([XYZ]?)$/i); if (hm){ push(mk('home', { axes: hm[1].toUpperCase() })); continue; }
+    if (code[0] === '$' || code[0] === '#'){ raw(code); continue; }
+    const words = tokenize(code); if (!words){ raw(code); continue; }
+    if (words.some(w => !'GMXYZIJFSPLTQ'.includes(w[0]))){ raw(code); continue; }
+    const val = L => { const w = words.find(x => x[0] === L); return w ? unwrap(w[1]) : ''; };
+    const hasW = L => words.some(x => x[0] === L);
+    const out = []; let machine = false, special = null, ok = true;
+    for (const [L, v] of words){
+      if (L === 'G'){ const g = parseFloat(v);
+        if (g === 20 || g === 21) out.push(mk('units', { mode: 'G' + g }));
+        else if (g === 90 || g === 91) out.push(mk('distance', { mode: 'G' + g }));
+        else if (g >= 54 && g <= 59 && Number.isInteger(g)) out.push(mk('wcs', { cs: String(g - 53) }));
+        else if ([0, 1, 2, 3].includes(g)) motion = 'G' + g;
+        else if (g === 53) machine = true;
+        else if ([4, 10, 38.2].includes(g)) special = g;
+        else if (g === 17 || g === 94) {}
+        else if (g === 43.1) out.push(mk('tlo', { mode: 'set', z: val('Z') || '0' }));
+        else if (g === 49) out.push(mk('tlo', { mode: 'cancel' }));
+        else { ok = false; break; } }
+      else if (L === 'M'){ const m = parseFloat(v);
+        if (m === 3 || m === 4) out.push(mk('spindle', { state: 'M' + m, s: val('S') }));
+        else if (m === 5) out.push(mk('spindle', { state: 'M5' }));
+        else if (m >= 7 && m <= 9) out.push(mk('coolant', { mode: 'M' + m }));
+        else if (m >= 62 && m <= 65) out.push(mk('output', { state: 'M' + m, pin: val('P') || '0' }));
+        else if (m === 0 || m === 1) out.push(mk('pause'));
+        else if (m === 2 || m === 30) out.push(mk('end', { mode: 'M' + m }));
+        else if (m === 6) out.push(mk('tool', { mode: 'M6', t: val('T') || '0' }));
+        else if (m === 61) out.push(mk('tool', { mode: 'M61', t: val('Q') || '0' }));
+        else { ok = false; break; } }
+    }
+    if (!ok){ raw(code); continue; }
+    const ax = out.some(b => b.type === 'tlo') ? [] : AX.filter(a => hasW(a.toUpperCase()));
+    if ((hasW('T') || hasW('Q')) && !out.some(b => b.type === 'tool')){ raw(code); continue; }
+    if (special === 10){ const L = val('L'); if (L !== '2' && L !== '20'){ raw(code); continue; }
+      out.push(mk('workzero', { mode: L === '2' ? 'machine' : 'here', cs: val('P') || '1', x: val('X'), y: val('Y'), z: val('Z') })); }
+    else if (special === 4) out.push(mk('dwell', { p: val('P') || '0' }));
+    else if (special === 38.2){ if (ax.length !== 1){ raw(code); continue; } out.push(mk('probe', { axis: ax[0], d: val(ax[0].toUpperCase()), f: val('F') })); }
+    else if (ax.length || hasW('I') || hasW('J')){
+      if (motion === 'G0') out.push(mk('rapid', { coords: machine ? 'machine' : 'work', x: val('X'), y: val('Y'), z: val('Z') }));
+      else if (motion === 'G1') out.push(mk('feed', { coords: machine ? 'machine' : 'work', x: val('X'), y: val('Y'), z: val('Z'), f: val('F') }));
+      else { if (machine || hasW('Z')){ raw(code); continue; } out.push(mk('arc', { dir: motion, x: val('X'), y: val('Y'), i: val('I'), j: val('J'), f: val('F') })); }
+    }
+    else if (hasW('F')) out.push(mk('fset', { f: val('F') }));
+    if (hasW('S') && !out.some(b => b.type === 'spindle')){ raw(code); continue; }
+    if (!out.length){ raw(code); continue; }
+    out.forEach(push);
+  }
+  while (stack.length > 1){ const top = stack.pop(); if (top.kind === 'do') cur().push(...top.list); }
+  return { blocks: root, steps, raws };
+}
+let importName = '';
+$('#b-gimport').addEventListener('click', () => { const p = $('#imp'); p.hidden = !p.hidden; if (!p.hidden){ $('#imp-status').textContent = ''; $('#imp-text').focus(); } });
+$('#imp-close').addEventListener('click', () => { $('#imp').hidden = true; });
+$('#imp-file-btn').addEventListener('click', () => $('#imp-file').click());
+$('#imp-file').addEventListener('change', e => { const file = e.target.files[0]; if (!file) return; const rd = new FileReader();
+  rd.onload = () => { $('#imp-text').value = String(rd.result); importName = file.name; $('#imp-status').textContent = file.name + ' loaded'; };
+  rd.readAsText(file); e.target.value = ''; });
+function doImport(mode){
+  const txt = $('#imp-text').value; if (!txt.trim()){ $('#imp-status').textContent = 'Paste some G-code or open a file first'; return; }
+  const r = parseGcode(txt);
+  if (mode === 'replace'){ P.blocks = r.blocks; if (importName) P.name = importName; } else P.blocks.push(...r.blocks);
+  sel = { id: null, branch: null }; PLAY.t = null; PLAY.playing = false; renderMachine(); refreshAll();
+  $('#imp-status').textContent = 'Imported ' + r.steps + ' steps' + (r.raws ? ', ' + r.raws + ' kept as Raw G-code' : '');
+  $('#imp-text').value = ''; importName = '';
+}
+$('#imp-replace').addEventListener('click', () => doImport('replace'));
+$('#imp-append').addEventListener('click', () => doImport('append'));
+
+/* ---------- tutorial ---------- */
+const TUT = { on: false, i: 0, saved: null, leaving: false };
+const tq = {
+  all: () => allBlocks(),
+  rep: () => P.blocks.find(b => b.type === 'repeat'),
+  iff: () => { const r = tq.rep(); return r ? r.children.find(b => b.type === 'if') : null; },
+  isI: b => b && b.type === 'set' && vname(b.name).toLowerCase() === '_i',
+};
+const tAdd = (list, b, branch) => { list.push(b); sel = { id: b.id, branch: branch || null }; return b; };
+const TSTEPS = [
+  { t: 'Build a macro that makes a decision',
+    x: 'You\'ll build a macro that marks three spots 30 mm apart. The first two are shallow and the last one goes deeper, decided by an <b>If</b> step. Your current macro is set aside, and you can bring it back at the end.' },
+  { t: 'Check your machine', target: () => '#mpanel > summary',
+    x: 'The <b>Machine</b> panel holds your travel limits, home position and safe Z. The preview uses them to flag any move that would leave your machine. Open it, check the numbers match your machine, then press Next.' },
+  { t: 'Home the machine', target: () => '[data-add="home"]',
+    x: 'In <b>Add a step</b>, click <b>Home</b> under Motion. Every run then starts from the same known position.',
+    done: () => tq.all().some(b => b.type === 'home'), auto: () => tAdd(P.blocks, mk('home')) },
+  { t: 'Put work zero on your stock', target: () => tq.all().some(b => b.type === 'workzero') ? '.step.is-sel' : '[data-add="workzero"]',
+    x: 'Click <b>Set work zero</b>. In its settings set How to <b>Origin at a machine position (G10 L2)</b>, then X <code>100</code>, Y <code>100</code> and Z <code>-40</code>. Work coordinates now start from that spot on every run.',
+    done: () => tq.all().some(b => b.type === 'workzero' && b.mode === 'machine' && has(b.x) && has(b.y) && has(b.z)),
+    auto: () => { const w = tq.all().find(b => b.type === 'workzero') || tAdd(P.blocks, mk('workzero')); Object.assign(w, { mode: 'machine', x: '100', y: '100', z: '-40' }); sel = { id: w.id, branch: null }; } },
+  { t: 'Make a counter', target: () => tq.all().some(b => b.type === 'set') ? '.step.is-sel' : '[data-add="set"]',
+    x: 'Click <b>Set variable</b> under Variables and logic. Name it <code>_i</code> and set the value to <code>0</code>. It keeps track of which spot you\'re on.',
+    done: () => P.blocks.some(b => tq.isI(b) && String(b.value).trim() === '0'), auto: () => tAdd(P.blocks, mk('set', { name: '_i', value: '0' })) },
+  { t: 'Repeat three times', target: () => tq.rep() ? '.step.is-sel' : '[data-add="repeat"]',
+    x: 'Click <b>Repeat</b> and set Times to <code>3</code>. New steps now go inside the repeat. The highlighted <b>+ Add steps inside</b> button shows where they\'ll land.',
+    done: () => { const r = tq.rep(); return !!r && String(r.count).trim() === '3'; }, auto: () => { const r = tAdd(P.blocks, mk('repeat', { count: '3' })); sel = { id: r.id, branch: 'children' }; } },
+  { t: 'Move to each spot', target: () => { const r = tq.rep(); return r && r.children.some(b => b.type === 'rapid') ? '.step.is-sel' : '[data-add="rapid"]'; },
+    x: 'Click <b>Rapid move</b> and set X to <code>#&lt;_i&gt; * 30</code>, Y to <code>0</code> and Z to <code>5</code>. As _i goes 0, 1, 2, the spots land at X0, X30 and X60.',
+    done: () => { const r = tq.rep(); return !!r && r.children.some(b => b.type === 'rapid' && /_i/i.test(b.x || '')); },
+    auto: () => { const r = tq.rep(); if (r) tAdd(r.children, mk('rapid', { x: '#<_i> * 30', y: '0', z: '5' })); } },
+  { t: 'Add the decision', target: () => tq.iff() ? '.step.is-sel' : '[data-add="if"]',
+    x: 'Click <b>If</b> and set the condition to <code>#&lt;_i&gt; EQ 2</code>. It\'s only true on the third pass, because _i starts at 0.',
+    done: () => { const f = tq.iff(); return !!f && /_i/i.test(f.cond) && /EQ\s*2/i.test(f.cond); },
+    auto: () => { const r = tq.rep(); if (r) tAdd(r.children, mk('if', { cond: '#<_i> EQ 2' }), 'children'); } },
+  { t: 'Deep mark when it\'s true', target: () => { const f = tq.iff(); if (!f) return null; return sel.id === f.id && sel.branch === 'children' ? '[data-add="feed"]' : `.add-here[data-id="${f.id}"][data-branch="children"]`; },
+    x: 'Click <b>+ Add steps inside</b> under the If, then click <b>Cutting move</b>. Set Z to <code>-6</code> and the feed to <code>300</code>.',
+    done: () => { const f = tq.iff(); return !!f && f.children.some(b => b.type === 'feed' && has(b.z)); },
+    auto: () => { const f = tq.iff(); if (f) tAdd(f.children, mk('feed', { z: '-6', f: '300' })); } },
+  { t: 'Shallow mark otherwise', target: () => { const f = tq.iff(); if (!f) return null; return sel.id === f.id && sel.branch === 'else' ? '[data-add="feed"]' : `.add-here[data-id="${f.id}"][data-branch="else"]`; },
+    x: 'Click <b>+ Add steps to Else</b>, then <b>Cutting move</b> with Z <code>-3</code> and feed <code>300</code>. These steps run on every pass where the condition is false.',
+    done: () => { const f = tq.iff(); return !!f && f.else.some(b => b.type === 'feed' && has(b.z)); },
+    auto: () => { const f = tq.iff(); if (f) tAdd(f.else, mk('feed', { z: '-3', f: '300' })); } },
+  { t: 'Lift and count', target: () => { const r = tq.rep(), f = tq.iff(); if (!r || !f) return null; const after = r.children.slice(r.children.indexOf(f) + 1);
+      if (after.some(b => b.type === 'rapid')) return '[data-add="set"]'; return sel.id === f.id && !sel.branch ? '[data-add="rapid"]' : `.step[data-id="${f.id}"] > .step-head`; },
+    x: 'Click the <b>If</b> header so new steps go after it. Add a <b>Rapid move</b> with Z <code>5</code>, then a <b>Set variable</b> named <code>_i</code> with value <code>#&lt;_i&gt; + 1</code>.',
+    done: () => { const r = tq.rep(); return !!r && r.children.some(b => tq.isI(b) && /\+/.test(b.value)); },
+    auto: () => { const r = tq.rep(); if (r){ tAdd(r.children, mk('rapid', { z: '5' })); tAdd(r.children, mk('set', { name: '_i', value: '#<_i> + 1' })); } } },
+  { t: 'Finish safely', target: () => { const r = tq.rep(); if (!r) return null; return sel.id === r.id && !sel.branch ? '[data-add="retract"]' : `.step[data-id="${r.id}"] > .step-head`; },
+    x: 'Click the <b>Repeat</b> header, then add a <b>Retract</b>. The bit lifts to your machine\'s safe Z when the job is done.',
+    done: () => P.blocks.some(b => b.type === 'retract'), auto: () => tAdd(P.blocks, mk('retract', { mode: 'safe' })) },
+  { t: 'Watch it run', target: () => '#p-play',
+    x: 'Press <b>Play</b> under the preview. The third spot goes deeper, and the readout shows <code>#&lt;_i&gt;</code> counting up. The 3D view with Z × turned up shows the depths best.',
+    done: () => PLAY.t != null, auto: () => $('#p-play').click() },
+  { t: 'Read the result', target: () => '#gpanel',
+    x: 'The G-code panel shows the <code>o100 repeat</code> and <code>o101 if</code> blocks FluidNC will run. Switch Output to <b>Plain G-code</b> to see the same macro unrolled into fixed moves for firmware without o-code support. That\'s the whole workflow.' },
+];
+function tutRender(){
+  document.querySelectorAll('.tut-glow').forEach(el => el.classList.remove('tut-glow'));
+  if (!TUT.on) return;
+  const st = TSTEPS[TUT.i];
+  $('#tut-count').textContent = (TUT.i + 1) + ' of ' + TSTEPS.length;
+  $('#tut-actions').hidden = TUT.leaving; $('#tut-leave').hidden = !TUT.leaving;
+  if (TUT.leaving){ $('#tut-title').textContent = 'Keep the tutorial macro?'; $('#tut-body').innerHTML = 'You can keep what you built, or put back the macro you had before the tutorial.'; $('#tut-state').textContent = ''; return; }
+  $('#tut-title').textContent = st.t; if ($('#tut-body').dataset.i !== String(TUT.i)){ $('#tut-body').innerHTML = st.x; $('#tut-body').dataset.i = TUT.i; }
+  const ok = !st.done || st.done();
+  const stEl = $('#tut-state'); stEl.textContent = st.done ? (ok ? 'Done. Press Next.' : 'Waiting for you…') : ''; stEl.classList.toggle('ok', !!(st.done && ok));
+  $('#tut-back').disabled = TUT.i === 0; $('#tut-auto').hidden = !st.auto || ok;
+  $('#tut-next').disabled = !ok; $('#tut-next').textContent = TUT.i === TSTEPS.length - 1 ? 'Finish' : 'Next';
+  if (!ok && st.target){ const q = st.target(); const el = q && document.querySelector(q); if (el) el.classList.add('tut-glow'); }
+  else if (!st.done && st.target){ const q = st.target(); const el = q && document.querySelector(q); if (el) el.classList.add('tut-glow'); }
+}
+function tutStart(){
+  TUT.saved = JSON.stringify(P); TUT.on = true; TUT.i = 0; TUT.leaving = false; $('#tut-body').dataset.i = '';
+  P = { name: 'tutorial_marks.nc', head: true, indent: true, plain: false, machine: Object.assign({ ...P.machine }, { ref: 'machine' }), blocks: [mk('units'), mk('distance')] };
+  sel = { id: null, branch: null }; PLAY.t = null; PLAY.playing = false;
+  $('#pal-q').value = ''; renderPalette(); renderMachine(); $('#tut').hidden = false; refreshAll();
+}
+function tutEnd(restore){
+  if (restore && TUT.saved){ P = JSON.parse(TUT.saved); P.machine = Object.assign({ ...DEFAULT_MACHINE }, P.machine || {}); sel = { id: null, branch: null }; PLAY.t = null; renderMachine(); }
+  TUT.on = false; TUT.leaving = false; TUT.saved = null; $('#tut').hidden = true; refreshAll();
+}
+$('#b-tut').addEventListener('click', () => { if (TUT.on) return; tutStart(); });
+$('#tut-next').addEventListener('click', () => {
+  if (TUT.i >= TSTEPS.length - 1){ TUT.leaving = true; tutRender(); return; }
+  TUT.i++; const st = TSTEPS[TUT.i];
+  if (st.target && st.target() === '#mpanel > summary') {}
+  if (st.target && st.target() === '#gpanel' && LAYOUT.hideG){ LAYOUT.hideG = false; applyLayout(); draw(); }
+  tutRender(); const q = st.target && st.target(); const el = q && document.querySelector(q); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+});
+$('#tut-back').addEventListener('click', () => { if (TUT.i > 0){ TUT.i--; tutRender(); } });
+$('#tut-auto').addEventListener('click', () => { const st = TSTEPS[TUT.i]; if (!st.auto) return; st.auto(); if (TSTEPS[TUT.i].target && TUT.i === TSTEPS.length - 2) return tutRender(); refreshAll(); });
+$('#tut-exit').addEventListener('click', () => { TUT.leaving = true; tutRender(); });
+$('#tut-keep').addEventListener('click', () => tutEnd(false));
+$('#tut-restore').addEventListener('click', () => tutEnd(true));
+
+/* ---------- reference ---------- */
+// mini markup: {{code}}, **bold**, [[id|label]] link, blank line = new paragraph
+const md = t => esc(t).replace(/\{\{(.+?)\}\}/g, '<code>$1</code>').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+  .replace(/\[\[([\w-]+)\|(.+?)\]\]/g, '<button class="ref-link" data-ref="$1">$2</button>').split(/\n\s*\n/).map(x => '<p>' + x.trim() + '</p>').join('');
+const RG = ['Concepts', 'Motion', 'Patterns', 'Machine', 'Variables and logic', 'Notes'];
+const DOCS = [
+ { id:'coords', g:'Concepts', t:'Coordinates: machine, work and relative',
+   what:'Every position in a macro is measured from one of three places, and mixing them up is the most common cause of a bit going somewhere unexpected.',
+   fields:[['Machine coordinates','Measured from where homing puts the machine. They never change, so {{G53 G0 Z-3}} is the same height on every run. Your travel limits, home position and machine Safe Z all use these.'],
+     ['Work coordinates','Measured from work zero, usually a corner and the top of your stock. Set it with [[workzero|Set work zero]]. Most moves use these, so a macro can run on stock clamped anywhere.'],
+     ['Relative','Measured from wherever the bit is right now. {{G91 G0 Z5}} lifts 5 mm from the current height. The app switches back to absolute mode (G90) straight after a relative move.']],
+   ex:['G53 G0 Z-3      (machine: 3 mm below the top of Z travel)','G0 X0 Y0 Z5     (work: 5 mm above work zero)','G91 G0 Z5','G90             (relative: 5 mm up from here)'],
+   tips:['The preview always draws in machine coordinates and marks each work zero with a WORK 0 crosshair.','Under **Starting point** in the Machine panel, "Homed machine" assumes the macro starts from your home position and "Wherever you jog to" starts from the Start X/Y/Z you enter.'] },
+ { id:'vars', g:'Concepts', t:'Variables and expressions',
+   what:'Any number field accepts an expression, so one macro can adapt to different sizes, counts or depths.\n\nVariables are written {{#<name>}}. Names starting with an underscore, like {{#<_depth>}}, are global and the safe choice for anything shared across steps. Set them with [[set|Set variable]].',
+   fields:[['Arithmetic','{{+ - * /}}, {{MOD}} for remainder and {{**}} for power. Group with square brackets: {{[#<_w> - 6] / 2}}.'],
+     ['Functions','{{ABS}}, {{SQRT}}, {{ROUND}}, {{FIX}} (round down), {{FUP}} (round up), {{EXP}}, {{LN}}, {{SIN}}, {{COS}}, {{TAN}}, {{ASIN}}, {{ACOS}} and {{ATAN[y]/[x]}}. Arguments go in square brackets: {{SQRT[#<_a>]}}.'],
+     ['Angles','Trig functions work in degrees.'],
+     ['Built-in values','{{#<_x>}}, {{#5063}}, {{#<_current_tool>}} and others are set by FluidNC. See [[builtins|Built-in values]].'],
+     ['Brackets','You don\'t need outer brackets. The app adds them where G-code needs them, so typing {{#<_w> / 2}} in X produces {{X[#<_w> / 2]}}.']],
+   ex:['#<_width> = 200','#<_passes> = [FUP[#<_width> / 15]]','G1 X[#<_width> / 2] F800'],
+   tips:['A field turns red if the expression can\'t be read. The usual cause is a bare name like {{width}} instead of {{#<_width>}}.','The preview lists every variable\'s final value, and the playback readout shows their values at each moment.','Variables need a FluidNC version with expression support. See [[output|Output modes]] for a fallback.'] },
+ { id:'cond', g:'Concepts', t:'Conditions',
+   what:'[[if|If]] and [[while|While]] steps take a condition. It counts as true when it works out to anything other than zero.',
+   fields:[['Comparisons','{{EQ}} equal, {{NE}} not equal, {{GT}} greater than, {{GE}} greater or equal, {{LT}} less than, {{LE}} less or equal.'],
+     ['Combining','{{AND}}, {{OR}} and {{XOR}}, with brackets to group: {{[#<_i> GT 0] AND [#<_i> LT 5]}}.'],
+     ['Even or odd','{{[#<_i> MOD 2] EQ 0}} is true for 0, 2, 4…']],
+   tips:['Avoid {{EQ}} on values that come from division or probing. Tiny rounding differences make them unequal. Use {{LT}}/{{GT}} or {{ROUND[]}} instead.','Words like {{EQ}} must have spaces around them.'] },
+ { id:'ocodes', g:'Concepts', t:'How logic becomes G-code',
+   what:'Logic steps are written as numbered o-code blocks. Each block\'s opening and closing lines share a number, which the app assigns automatically from 100 upwards.',
+   ex:['o100 repeat [3]','  o101 if [#<_i> EQ 2]','    G1 Z-6','  o101 else','    G1 Z-3','  o101 endif','o100 endrepeat'],
+   tips:['"Indent nested blocks" only adds spaces for readability. FluidNC ignores them.','Imported files with {{elseif}} become an If nested inside the Else of the previous If, which runs the same way.'] },
+ { id:'builtins', g:'Concepts', t:'Built-in values',
+   what:'FluidNC fills in some values itself, and expressions and conditions can read them. Use them to react to where the machine is or what a probe found. Don\'t use these names for your own variables. The preview warns if you do.',
+   fields:[['{{#<_x>}}, {{#<_y>}}, {{#<_z>}}','The current position in work coordinates. The preview works them out as it runs.'],
+     ['{{#5061}}, {{#5062}}, {{#5063}}','Where the last probe triggered: X, Y and Z. A FluidNC tool-setting script uses {{#5063}} for the Z result. The preview uses the full probe travel, so treat its values as placeholders.'],
+     ['{{#<_current_tool>}}, {{#<_selected_tool>}}','The fitted tool and the requested tool. An M6 macro reads {{#<_selected_tool>}} and confirms the change with {{M61 Q#<_selected_tool>}}.'],
+     ['Config values','FluidNC also exposes config settings by path, such as {{#</axes/z/motor0/pulloff_mm>}}. Use a Raw G-code step for those.']],
+   ex:['G38.2 Z-50 F100','#<_trigger> = #5063','o100 if [#<_trigger> LT -45]','  (MSG, Probe found nothing near the expected height)','  M30','o100 endif'],
+   tips:['The scripts these come from target FluidNC 3.8.2 or newer. Check your version, and test once by printing a value with a message step before relying on it.'] },
+ { id:'safez', g:'Concepts', t:'Safe heights',
+   what:'Two different safe heights appear in the app. Both are absolute positions, not amounts of lift.',
+   fields:[['Safe Z (machine)','In the Machine panel. A machine coordinate used by [[retract|Retract]], output as {{G53 G0 Z-3}}. The same height every run, whatever the work zero or tool length.'],
+     ['Safe Z (work)','On pattern blocks. A work coordinate, so {{5}} means 5 mm above work zero.'],
+     ['A lift amount','For "go up 5 mm from here", use Retract → Up by a distance, or a Rapid move with Coordinates set to Relative.']] },
+ { id:'output', g:'Concepts', t:'Output modes and compatibility',
+   what:'The G-code panel can write the macro two ways.',
+   fields:[['Full','Keeps variables, expressions and o-code logic, so the file stays short and adapts as it runs. Under the options, the app lists which advanced features the macro relies on.'],
+     ['Plain G-code','The simulator works out every loop, condition and variable in advance and writes fixed numbers. It runs on any controller, but values are frozen at the preview, including [[need|Required inputs]], which use their preview value.'],
+     ['Header with setup notes','Adds comments at the top: how to start, units, work zero, required inputs, spindle, tool, travel range and estimated time.']],
+   tips:['Downloads save as .txt because the viewer only allows certain file types. Rename to .nc if your sender filters by extension.','Run a saved file with {{$SD/Run=/name.nc}} or {{$LocalFS/Run=/name.nc}}, or map it to a macro button in your FluidNC config.'] },
+ { id:'preview', g:'Concepts', t:'Preview, warnings and playback',
+   what:'The preview runs your macro in the browser, including variables and loops, and draws the real toolpath in machine coordinates.',
+   fields:[['Warnings','Listed under the preview: moves outside your travel limits, cuts with no feed rate set, bad expressions, arcs whose end isn\'t on the circle, and loops that don\'t finish. Click one to jump to its step.'],
+     ['Cut width','In the top view, cutting moves are shaded at the tool diameter from the Machine panel.'],
+     ['Playback','Play, step through moves and scrub the slider. The readout shows the active step, work and machine position, feed and variable values.'],
+     ['3D','Drag to orbit, right-drag or shift-drag to pan, scroll to zoom. Z × exaggerates depth.'],
+     ['Estimated time','Based on your feed rates, the max rapid rate and any waits. Real machines also spend time accelerating, so expect a little longer.']],
+   tips:['Probing is drawn as the full travel to its target, since the preview can\'t know where contact happens.','Raw G-code steps aren\'t simulated.'] },
+
+ { id:'rapid', type:'rapid', what:'Moves in a straight line at the machine\'s fastest rate. Use it only for travel through air, never into material.',
+   code:['G0 X10 Y20','G53 G0 Z-3          (machine coordinates)','G91 G0 Z5 / G90     (relative)'],
+   fields:[['Coordinates','Work coordinates, Machine (G53), or Relative to current. See [[coords|Coordinates]].'],['X, Y, Z','Where to go. Leave an axis blank to keep it where it is. Accepts expressions.']],
+   tips:['Lift Z in its own step before moving X and Y, so the bit never travels sideways at cutting depth.','G53 only applies to the line it\'s on.'] },
+ { id:'feed', type:'feed', what:'Moves in a straight line at a controlled feed rate. Use it for every move that touches material, including plunges.',
+   code:['G1 X50 Y0 F1200','G1 Z-2 F300'],
+   fields:[['Coordinates','As for [[rapid|Rapid move]].'],['X, Y, Z','Where to go. Blank axes don\'t move.'],['Feed mm/min','The cutting speed. Once set, it stays in effect for later cutting moves and arcs, so leave it blank to keep the last one.']],
+   tips:['FluidNC rejects a cutting move if no feed rate has been set yet. The preview warns about this.','Use a slower feed for plunges than for side cuts.'] },
+ { id:'retract', type:'retract', what:'Lifts the bit clear. Either goes to your machine\'s safe Z, or lifts by a set distance from wherever it is.',
+   code:['G53 G0 Z-3          (to machine safe Z)','G91 G0 Z5','G90                 (up by a distance)'],
+   fields:[['How','To machine safe Z uses the Safe Z (machine) value from the Machine panel. Up by a distance is relative.'],['Distance','Used only for the relative mode.']],
+   tips:['A relative lift isn\'t capped at your Z limit. The preview flags it if it would go too high.'] },
+ { id:'arc', type:'arc', what:'Cuts a circular arc from the current position to an end point, around a centre you give as an offset.',
+   code:['G2 X60 Y20 I0 J10 F600','G3 X-10 Y0 I-10 J0'],
+   fields:[['Direction','G2 clockwise or G3 counter-clockwise, seen from above.'],['End X, End Y','Where the arc finishes. Absolute or relative, following the current distance mode.'],['Centre I, J','The centre\'s offset from the start point, always relative. I is the X offset and J the Y offset.'],['Feed','Optional if a feed rate is already set.']],
+   ex:['From X10 Y0, centre on the origin:','G3 X-10 Y0 I-10 J0   (half circle over the top)','G3 X10 Y0 I-10 J0    (full circle: end = start)'],
+   tips:['The end point must sit on the same circle as the start, or FluidNC raises an error. The preview checks this.','For helixes (arcs that also move Z), use a Raw G-code step.','For spirals and rings, the [[spiral|Spiral]] and [[circles|Concentric circles]] patterns build the arcs for you.'] },
+ { id:'probe', type:'probe', what:'Moves toward a target until the probe input triggers, then stops. Use it with a touch plate or tool setter.',
+   code:['G38.2 Z-20 F100'],
+   fields:[['Axis','Which axis to probe along.'],['Target','The furthest it should go, in the current coordinates. If nothing triggers by then, FluidNC stops with an error.'],['Feed','Probing speed. Slow is more accurate.']],
+   ex:['Touch plate 15 mm thick, then set Z zero on the stock:','G38.2 Z-30 F100','G10 L20 P1 Z15','G91 G0 Z5','G90'],
+   tips:['After the probe, {{#5061}}–{{#5063}} hold where it triggered. See [[builtins|Built-in values]].','The preview draws the full travel to the target.','For accuracy, probe fast, back off a little, then probe again slowly.'] },
+ { id:'home', type:'home', what:'Runs the homing cycle, so the machine finds its switches and knows exactly where it is.',
+   code:['$H','$HZ'], fields:[['Axes','All axes, or one axis.']],
+   tips:['Needs homing set up in your FluidNC config.','The preview moves to the Home position from the Machine panel.','Starting a macro with Home makes every run start from the same place.'] },
+ { id:'workzero', type:'workzero', what:'Sets where work coordinates are measured from.',
+   code:['G10 L2 P1 X100 Y100 Z-40     (origin at a machine position)','G10 L20 P1 X0 Y0 Z0         (current position becomes 0,0,0)'],
+   fields:[['How','Origin at a machine position (G10 L2) puts work zero at fixed machine coordinates, so it repeats exactly after homing. "Current position becomes…" (G10 L20) makes wherever the bit is now equal the values you give.'],
+     ['Coordinate system','G54 to G59. G54 is the default unless a [[wcs|Use coordinate system]] step picks another.'],['X, Y, Z','Blank axes keep their current offset.']],
+   tips:['The controller keeps work offsets until something changes them, so they also affect jobs you run later.','For several fixtures, set each one as its own coordinate system and switch between them.'] },
+ { id:'wcs', type:'wcs', what:'Chooses which saved work zero later work-coordinate moves use.', code:['G55'],
+   fields:[['System','G54 to G59.']], tips:['Handy for fixed jigs: save each jig\'s zero in its own system once, then select it in each macro.'] },
+
+ { id:'spiral', type:'spiral', what:'Cuts a continuous spiral outward from a centre or inward from the edge, for clearing round pockets or facing a circle.',
+   fields:[['Start','Outward from the centre, or inward from the outside.'],['Direction','Clockwise or counter-clockwise.'],['Centre X, Y','Work coordinates. Pre-filled with where the bit is when you add the block.'],['Radius','Outer radius.'],['Stepover','Gap between turns. Adjusted slightly so the spiral ends exactly on the radius.'],['Pass settings','See [[pattern-common|Pattern settings]].']],
+   tips:['Built from half-circle arcs whose radius grows by half the stepover each half turn, then a full circle cleans the edge.','Keep stepover below your tool diameter, usually 40–60%, for a clean floor.'] },
+ { id:'zigzag', type:'zigzag', what:'Back-and-forth parallel passes over a rectangle, for surfacing and pocket floors.',
+   fields:[['Passes','Along X or along Y.'],['Corner X, Y','The lowest X and Y corner, in work coordinates.'],['Width, Height','Size of the area.'],['Stepover','Gap between passes. Adjusted so the last pass lands on the far edge.'],['Pass settings','See [[pattern-common|Pattern settings]].']],
+   tips:['The pattern covers the toolpath centreline. For a surface to the very edge, make the area larger by the tool radius on each side.'] },
+ { id:'circles', type:'circles', what:'Separate concentric circles, for rings, engraving or round pockets.',
+   fields:[['Order','Smallest first or largest first.'],['Between rings','Cut straight across to the next ring, or lift to safe Z and re-plunge.'],['Centre, Outer radius, Spacing','Geometry, in work coordinates.'],['Pass settings','See [[pattern-common|Pattern settings]].']] },
+ { id:'rects', type:'rects', what:'Concentric rectangles inset by a spacing, for clearing rectangular pockets or framing.',
+   fields:[['Order','Outside first or centre first.'],['Corner, Width, Height','The outer rectangle. Equal width and height gives squares.'],['Spacing','Inset between rings. The innermost ring closes to a line through the middle so the centre is cleared.'],['Between rings','Cut across or lift.'],['Pass settings','See [[pattern-common|Pattern settings]].']] },
+ { id:'pattern-common', g:'Patterns', t:'Pattern settings',
+   what:'All four patterns share these settings and produce a short o-code loop rather than hundreds of fixed lines, so every field can use variables.',
+   fields:[['Cut depth Z (work)','The depth to cut at. Leave blank to cut at the current height.'],['Step down per pass','Optional. Splits the depth into evenly spaced passes no deeper than this, returning to the start between passes.'],['Top Z (work)','Where multi-pass depths start from, usually 0 at the stock surface.'],['Safe Z (work)','Height for travel before and after. Leave blank to skip lifting.'],['Feed','Cutting speed for the pattern.']],
+   tips:['**Expand into editable steps** turns a pattern into ordinary steps you can change. **Collapse back to pattern** reverses it, and warns first if you\'ve edited them.','Temporary variables are named like {{#<_pk3j9_r>}} so patterns never clash with each other or with yours.'] },
+
+ { id:'tool', type:'tool', what:'Requests a tool change, or records which tool is fitted.', code:['T2 M6','M61 Q2'],
+   fields:[['Action','Change tool runs FluidNC\'s tool-change routine. Set tool number only (M61) just updates which tool the controller thinks is fitted.'],['Tool number','The tool to change to. Accepts expressions.']],
+   tips:['With {{atc_manual}} in your config, M6 parks at the change position, waits for you to swap, then measures the new tool on the tool setter.','With a custom {{m6_macro}}, your macro runs instead. It should finish with {{M61 Q#<_selected_tool>}}.','M6 does nothing if the tool number hasn\'t changed.','The preview tracks the tool number in {{#<_current_tool>}} but doesn\'t move for the change itself.'] },
+ { id:'tlo', type:'tlo', what:'Applies or cancels a tool length offset, so a new tool cuts at the same depth without re-zeroing.', code:['G43.1 Z[#5063 - #<_ts_ref>]','G49'],
+   fields:[['Action','Apply offset (G43.1) or cancel it (G49).'],['Z offset','How much longer the current tool is than the reference tool. Positive for longer.']],
+   ex:['Reference tool on the tool setter:','G38.2 Z-60 F100','#<_ts_ref> = #5063','','After changing tools, probe again and apply the difference:','G38.2 Z-60 F100','G43.1 Z[#5063 - #<_ts_ref>]'],
+   tips:['The offset applies to work-coordinate moves. G53 machine moves aren\'t shifted.','It stays in effect until G49 or another G43.1, so cancel it at the end of a job if later jobs don\'t expect it.','Leave this to atc_manual if you use it, since it applies its own offset.'] },
+ { id:'end', type:'end', what:'Ends the program. Nothing after it runs.', code:['M30','M2'],
+   fields:[['Action','M30 or M2. Both end the program on FluidNC.']],
+   ex:['o100 if [#<_depth> GT 0]','  (MSG, Depth must be negative)','  M30','o100 endif'],
+   tips:['Put it inside an If to stop early when a check fails.','The preview stops simulating at this step.','Required input clearing lines at the end of the file don\'t run if the program ends earlier.'] },
+ { id:'spindle', type:'spindle', what:'Starts or stops the spindle or router.', code:['M3 S18000','M5'],
+   fields:[['State','On clockwise (M3), on counter-clockwise (M4), or off (M5).'],['Speed','RPM, scaled by your spindle config.']],
+   tips:['Add a [[dwell|Wait]] of a few seconds after starting so the spindle reaches speed before cutting.'] },
+ { id:'coolant', type:'coolant', what:'Switches mist, flood or air blast.', code:['M8','M9'], fields:[['Mode','Mist (M7), flood (M8) or off (M9).']], tips:['Needs coolant pins set up in your config.'] },
+ { id:'output', type:'output', what:'Switches a digital output defined in your config, such as a vacuum, laser or pneumatic valve.', code:['M64 P0','M62 P1'],
+   fields:[['Action','On or off now (M64/M65), or on or off in step with the next move (M62/M63).'],['Output P','The output number from your config.']] },
+ { id:'dwell', type:'dwell', what:'Waits a set time before carrying on.', code:['G4 P3'], fields:[['Seconds','How long to wait.']], tips:['Counted in the estimated time.'] },
+ { id:'pause', type:'pause', what:'Pauses the job until you press resume or cycle start.', code:['M0'],
+   tips:['Pair it with a [[msg|Show message]] so the operator knows why it stopped.','Some users report pauses inside macros behaving unreliably on FluidNC, so test it on your machine first.'] },
+ { id:'units', type:'units', what:'Sets whether numbers after this point are millimetres or inches.', code:['G21','G20'], tips:['Put it near the top of every macro so it doesn\'t depend on how the controller was left.'] },
+ { id:'distance', type:'distance', what:'Sets whether coordinates are absolute (from zero) or relative (from the current position).', code:['G90','G91'],
+   tips:['It stays in effect until changed, including for later jobs. Most macros should start with G90 and stay there, using relative moves only where needed.'] },
+
+ { id:'set', type:'set', what:'Stores a number in a variable for later steps to use.', code:['#<_count> = 0','#<_count> = [#<_count> + 1]'],
+   fields:[['Name','Start it with an underscore for a global variable. No # or angle brackets needed.'],['Value','A number or expression. See [[vars|Variables]].']] },
+ { id:'need', type:'need', what:'Stops the macro with a message if a value hasn\'t been set before running. Use it for anything the operator must choose, like depth.',
+   code:['o100 if [EXISTS[#<_depth>] EQ 0]','  (MSG, Set #<_depth> in the console first)','  M2','o100 endif'],
+   fields:[['Variable name','The variable the operator must set, e.g. by typing {{#<_depth> = -3}} in the console.'],['Preview value','Only used to draw the preview.'],['Cleared value','A placeholder the macro writes at the end, so the next run needs a fresh value.'],['At the end','Clear the value or keep it.'],['Message','Shown if the value is missing.']],
+   tips:['Test once that a value typed in the console survives into the macro run on your firmware.','An aborted run doesn\'t reach the clearing line, so the old value stays set.'] },
+ { id:'if', type:'if', what:'Runs the steps inside only when a condition is true. Steps under Else run when it\'s false.',
+   code:['o101 if [#<_i> EQ 2]','  G1 Z-6','o101 else','  G1 Z-3','o101 endif'],
+   fields:[['Condition','See [[cond|Conditions]].']], tips:['Use the + Add steps inside and + Add steps to Else buttons to choose where new steps go.'] },
+ { id:'while', type:'while', what:'Repeats the steps inside for as long as a condition stays true.', code:['o102 while [#<_y> LE #<_height>]','  ...','o102 endwhile'],
+   fields:[['Keep looping while','The condition, checked before each pass.']], tips:['Something inside must change the condition, or it loops forever. The preview stops after 20,000 steps and warns you.'] },
+ { id:'repeat', type:'repeat', what:'Runs the steps inside a set number of times.', code:['o103 repeat [3]','  ...','o103 endrepeat'],
+   fields:[['Times','A number or expression, worked out once when the loop starts.']], tips:['Pair it with a counter variable when each pass needs to know which pass it\'s on.'] },
+ { id:'passes', type:'passes', what:'Repeats the steps inside at stepped depths, for cutting deeper than one pass allows.',
+   fields:[['Depth variable','Set to each pass\'s depth. Use it as the Z of cutting moves inside, e.g. {{#<_pass_z>}}.'],['Top Z','Where the first pass steps down from.'],['Final depth Z','The last pass\'s depth.'],['Max step down','No pass goes deeper than this. Passes are spread evenly to land exactly on the final depth.']],
+   ex:['Top 0, final -6, max 1.5: four passes at -1.5, -3, -4.5 and -6.'] },
+ { id:'brk', type:'brk', what:'Leaves the nearest While or Repeat straight away.', code:['o102 break'], tips:['Usually placed inside an If.'] },
+ { id:'cont', type:'cont', what:'Skips the rest of this pass of the nearest loop and starts the next one.', code:['o102 continue'] },
+
+ { id:'comment', type:'comment', what:'A note in the file. FluidNC ignores it.', code:['(Surface the spoilboard)'], tips:['Brackets inside the text are removed, since they would end the comment early.'] },
+ { id:'msg', type:'msg', what:'Shows a message to the operator on the controller or WebUI.', code:['(MSG, Change to the 3 mm bit)'] },
+ { id:'raw', type:'raw', what:'Passes lines straight into the file exactly as written, for anything the app doesn\'t have a step for.', code:['T1 M6','G2 X10 Y0 Z-1 I-5 J0'],
+   tips:['Not simulated, so the preview ignores it.','Imported lines the app can\'t convert become Raw G-code steps.'] },
+];
+const GOF = { motion:'Motion', pat:'Patterns', mach:'Machine', logic:'Variables and logic', note:'Notes' };
+DOCS.forEach(d => { if (d.type){ d.t = d.t || T[d.type].label; d.g = d.g || GOF[T[d.type].g]; } });
+function docHtml(d){
+  let h = '';
+  if (d.type){ const grp = GROUPS.find(g => g[2].includes(d.type)); if (grp) h += `<div class="ref-where">Add a step → ${esc(grp[0])} → ${esc(T[d.type].label)}</div>`; }
+  h += '<div class="lead">' + md(d.what) + '</div>';
+  if (d.code) h += '<h4>G-code it writes</h4><pre>' + esc(d.code.join('\n')) + '</pre>';
+  if (d.fields) h += '<h4>' + (d.type ? 'Settings' : 'Details') + '</h4><dl>' + d.fields.map(([a, b]) => `<dt>${esc(a)}</dt><dd>${md(b).replace(/^<p>|<\/p>$/g, '')}</dd>`).join('') + '</dl>';
+  if (d.ex) h += '<h4>Example</h4><pre>' + esc(d.ex.join('\n')) + '</pre>';
+  if (d.tips) h += '<h4>Good to know</h4><ul>' + d.tips.map(t => '<li>' + md(t).replace(/^<p>|<\/p>$/g, '') + '</li>').join('') + '</ul>';
+  return h;
+}
+let refCur = 'coords';
+function renderRefNav(){
+  const q = ($('#ref-q').value || '').trim().toLowerCase();
+  const hit = d => !q || (d.t + ' ' + d.what + ' ' + (d.code || []).join(' ') + ' ' + (d.fields || []).flat().join(' ')).toLowerCase().includes(q);
+  $('#ref-list').innerHTML = RG.map(g => { const items = DOCS.filter(d => d.g === g && hit(d)); if (!items.length) return '';
+    return `<div class="ref-g">${esc(g)}</div>` + items.map(d => `<button class="ref-item${d.id === refCur ? ' on' : ''}" data-ref="${d.id}">${esc(d.t)}</button>`).join(''); }).join('') || '<p class="mhint">Nothing matches that search.</p>';
+  $('#ref-sel').innerHTML = RG.map(g => `<optgroup label="${esc(g)}">` + DOCS.filter(d => d.g === g && hit(d)).map(d => `<option value="${d.id}"${d.id === refCur ? ' selected' : ''}>${esc(d.t)}</option>`).join('') + '</optgroup>').join('');
+}
+function showRef(id){
+  const d = DOCS.find(x => x.id === id) || DOCS[0]; refCur = d.id;
+  $('#ref-group').textContent = d.g; $('#ref-title').textContent = d.t; $('#ref-body').innerHTML = docHtml(d);
+  $('#ref-main').scrollTop = 0; renderRefNav();
+}
+function openRef(id){ $('#ref').hidden = false; showRef(DOCS.some(d => d.id === id) ? id : refCur); $('#ref-close').focus(); }
+$('#b-ref').addEventListener('click', () => openRef(refCur));
+$('#ref-close').addEventListener('click', () => { $('#ref').hidden = true; });
+$('#ref').addEventListener('click', e => { if (e.target.id === 'ref'){ $('#ref').hidden = true; return; } const l = e.target.closest('[data-ref]'); if (l) showRef(l.dataset.ref); });
+$('#ref-sel').addEventListener('change', e => showRef(e.target.value));
+$('#ref-q').addEventListener('input', renderRefNav);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#ref').hidden) $('#ref').hidden = true; });
+
+renderPalette(); renderMachine(); refreshAll();
+})();
+</script>
+
+</body></html>
